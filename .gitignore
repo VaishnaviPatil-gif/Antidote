@@ -1,0 +1,18 @@
+# Node / frontend
+node_modules/
+dist/
+*.local
+
+# Python / backend
+backend/.venv/
+__pycache__/
+*.pyc
+
+# Secrets & env (never commit real keys)
+.env
+backend/.env
+
+# Editor / OS
+.vscode/
+.DS_Store
+*.log
