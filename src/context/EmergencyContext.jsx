@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useMemo,
 } from "react";
+import { saveSession, loadSession, clearSession } from "../lib/session.js";
 
 /**
  * EmergencyContext — the single source of truth that connects every screen,
@@ -25,6 +26,34 @@ const EmergencyContext = createContext(null);
 
 const STORAGE_KEY = "antidote.emergency.v1";
 
+/**
+ * sessionStorage marker used to tell a *fresh app launch* apart from in-app
+ * navigation. sessionStorage is cleared when the app/tab process is closed (a
+ * real restart) but persists across route changes, so the absence of this
+ * marker on the provider's first mount means "the app was just (re)opened".
+ * Combined with a persisted bite, that's exactly when we offer to resume.
+ */
+const LIVE_KEY = "antidote.session.live";
+
+/** Debounce window (ms) for durable IndexedDB writes — coalesces bursts. */
+const SAVE_DEBOUNCE_MS = 400;
+
+/**
+ * Fresh-launch detection, resolved exactly once at module evaluation — before
+ * any component (or StrictMode's double-mount) runs, so it can't be flipped by
+ * a re-invoked initializer. The marker is absent only when the app process was
+ * just (re)started; after that it persists for the lifetime of the app session.
+ */
+const FRESH_LAUNCH = (() => {
+  try {
+    const wasLive = sessionStorage.getItem(LIVE_KEY) === "1";
+    sessionStorage.setItem(LIVE_KEY, "1");
+    return !wasLive;
+  } catch {
+    return false;
+  }
+})();
+
 /** Default shape — matches the §3 contract exactly. */
 const DEFAULT_STATE = {
   language: "te", // te | hi | en — default Telugu
@@ -36,6 +65,7 @@ const DEFAULT_STATE = {
   symptomLog: [], // Array<{ t, answers, level }>
   emergencyContact: null, // { name, phone } | null
   recommendedHospital: null, // set by routing so SOS / hospital view can read it
+  lastRoute: null, // deepest emergency screen visited — enables "resume" (§P1)
 };
 
 /**
@@ -68,7 +98,21 @@ function loadState() {
 export function EmergencyProvider({ children }) {
   const [state, setState] = useState(loadState);
 
+  // ── Durable session metadata (Priority 1) ───────────────────────────────
+  // `hydrated` gates the IndexedDB writer until we've read any pre-existing
+  // durable session, so an empty initial state can't clobber a saved one.
+  const [hydrated, setHydrated] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [sessionStartedAt, setSessionStartedAt] = useState(null);
+
+  // True only on a fresh app launch — see FRESH_LAUNCH / LIVE_KEY. The resume
+  // banner pairs this with a persisted bite to decide whether to offer resume.
+  // Held in state so `dismissResume` / `resetEmergency` can turn it off.
+  const [freshLaunch, setFreshLaunch] = useState(FRESH_LAUNCH);
+
   // Persist on every change (Dates serialise to ISO via JSON automatically).
+  // This synchronous localStorage mirror stays the first-paint source of truth
+  // so there is zero regression / no flash if IndexedDB is slow or blocked.
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -76,6 +120,53 @@ export function EmergencyProvider({ children }) {
       /* storage full / unavailable — non-fatal, app keeps working in memory */
     }
   }, [state]);
+
+  // One-time durable hydration. If localStorage was evicted (common on mobile
+  // WebViews) but IndexedDB kept the session, restore it. If the synchronous
+  // load already produced a live bite, that copy is freshest — keep it.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const saved = await loadSession();
+      if (cancelled) return;
+      if (saved) {
+        if (saved.meta?.startedAt) setSessionStartedAt(saved.meta.startedAt);
+        if (saved.meta?.updatedAt) setLastSavedAt(saved.meta.updatedAt);
+        setState((cur) => {
+          if (cur.biteTime) return cur; // localStorage copy wins when present
+          // Revive Dates the structured clone may not have carried through a
+          // localStorage-shaped object (defensive — IndexedDB usually keeps them).
+          const s = saved.state || {};
+          return {
+            ...DEFAULT_STATE,
+            ...s,
+            biteTime: s.biteTime ? new Date(s.biteTime) : null,
+            symptomLog: Array.isArray(s.symptomLog)
+              ? s.symptomLog.map((e) => ({ ...e, t: new Date(e.t) }))
+              : [],
+          };
+        });
+      }
+      setHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Debounced durable auto-save. Runs only after hydration so it never races
+  // the read above. Coalesces rapid edits (e.g. typing a contact) into one IO.
+  useEffect(() => {
+    if (!hydrated) return undefined;
+    const id = setTimeout(() => {
+      saveSession(state).then((meta) => {
+        if (!meta) return;
+        setLastSavedAt(meta.updatedAt);
+        setSessionStartedAt((prev) => prev ?? meta.startedAt);
+      });
+    }, SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [state, hydrated]);
 
   const patch = useCallback(
     (next) => setState((s) => ({ ...s, ...next })),
@@ -131,6 +222,21 @@ export function EmergencyProvider({ children }) {
   );
 
   /**
+   * Record the deepest emergency screen the victim reached (§P1). App.jsx calls
+   * this on navigation; the resume banner reads it to send the user back to
+   * exactly where they were after a restart. We ignore no-op repeats so this
+   * never triggers a redundant render / save.
+   */
+  const setLastRoute = useCallback(
+    (lastRoute) =>
+      setState((s) => (s.lastRoute === lastRoute ? s : { ...s, lastRoute })),
+    []
+  );
+
+  /** Dismiss the resume offer for this app session (e.g. user tapped Resume). */
+  const dismissResume = useCallback(() => setFreshLaunch(false), []);
+
+  /**
    * Clear the whole emergency and return to a clean slate — for a new victim or
    * a repeat demo. Wipes biteTime, symptomLog, severity, location, snake, etc.
    * and the persisted copy, but KEEPS the chosen language (a UI preference, not
@@ -143,12 +249,28 @@ export function EmergencyProvider({ children }) {
     } catch {
       /* storage unavailable — in-memory reset below still applies */
     }
+    // Drop the durable session too, so the next emergency starts a clean one.
+    clearSession();
+    setLastSavedAt(null);
+    setSessionStartedAt(null);
+    setFreshLaunch(false); // nothing left to resume after an explicit reset
     setState((s) => ({ ...DEFAULT_STATE, language: s.language }));
   }, []);
+
+  // A resumable emergency exists when this is a fresh launch AND there is a
+  // bite on record. The banner is the only consumer; derive it once here.
+  const resumeAvailable = freshLaunch && !!state.biteTime;
 
   const value = useMemo(
     () => ({
       ...state,
+      // Durable-session surface (§P1)
+      sessionStartedAt,
+      lastSavedAt,
+      resumeAvailable,
+      setLastRoute,
+      dismissResume,
+      // Setters
       setLanguage,
       startEmergency,
       setVictimLocation,
@@ -161,6 +283,11 @@ export function EmergencyProvider({ children }) {
     }),
     [
       state,
+      sessionStartedAt,
+      lastSavedAt,
+      resumeAvailable,
+      setLastRoute,
+      dismissResume,
       setLanguage,
       startEmergency,
       setVictimLocation,
