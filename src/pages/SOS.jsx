@@ -9,17 +9,30 @@ import { tFor } from "../i18n.js";
 import { useEmergency, minutesSinceBite } from "../context/EmergencyContext.jsx";
 import { useOnline } from "../hooks/useOnline.js";
 import { composeSummary, buildAlertMessage, DEMO_RECOMMENDED } from "../lib/handover.js";
+import EmergencyTimeline from "../components/EmergencyTimeline.jsx";
+import {
+  buildTimeline, buildPreparation, deriveCurrentIndex,
+  loadStamps, saveStamps, stampCompleted, COORD_STAGES,
+} from "../lib/coordinationTimeline.js";
 
 /**
- * SOS / family alert (§2.7).
+ * SOS / family alert + Emergency Coordination Timeline (§2.7).
  *
- * Composes ONE message from emergency context — location, live time-since-bite,
- * severity, the symptom summary and the recommended hospital — lets the user
- * edit it, then SIMULATES the send (no real SMS / WhatsApp / phone APIs; this
- * stays demo-safe and can't fail on stage). Offline, the alert is queued with a
- * visible "1 alert queued" indicator and auto-sends when connectivity returns.
+ * The screen is framed as a live coordination timeline (<EmergencyTimeline>):
+ * bite → GPS → hospital → route → contact notified → handover → hospital
+ * preparing → en route → arrival. Every event's status is derived from real
+ * EmergencyContext state and the live send/queue state (lib/coordinationTimeline
+ * holds all the logic), so a judge sees several parties being mobilised at once.
  *
- * Writes only `emergencyContact` to context; everything else is read.
+ * The original SOS controls are unchanged and now DRIVE the timeline: it still
+ * composes ONE message from context, lets the user edit it, and SIMULATES the
+ * send (no real SMS / phone APIs — demo-safe, can't fail on stage). Offline, the
+ * alert is queued with a visible indicator and auto-sends when signal returns;
+ * the timeline shows the same queued state. Once sent, a timer walks the
+ * hospital-side coordination (handover → preparing → en route → arrival) forward.
+ *
+ * Writes only `emergencyContact` to context; everything else is read. Real
+ * per-milestone timestamps are persisted locally, keyed to the current bite.
  */
 export default function SOS() {
   const navigate = useNavigate();
@@ -101,6 +114,73 @@ export default function SOS() {
     if (sendState === "queued" && online) doSend();
   }, [online, sendState, doSend]);
 
+  // ── Coordination timeline ──────────────────────────────────────────────
+  // Once the alert is sent, walk the hospital-side coordination forward one
+  // stage at a time (handover → preparing → en route → arrival) — the same
+  // demo-safe simulation pattern the routing confirm + the send already use.
+  const [coord, setCoord] = useState(0);
+  useEffect(() => {
+    if (sendState !== "sent") {
+      setCoord(0);
+      return undefined;
+    }
+    if (coord >= COORD_STAGES) return undefined;
+    const id = setTimeout(() => setCoord((c) => Math.min(c + 1, COORD_STAGES)), 1800);
+    return () => clearTimeout(id);
+  }, [sendState, coord]);
+
+  const currentIndex = deriveCurrentIndex({
+    biteTime, victimLocation, recommendedHospital, sendState, coord,
+  });
+
+  // Persist the real wall-clock time each milestone is reached, keyed to this
+  // bite so a reload keeps them and a new emergency starts fresh.
+  const [stamps, setStamps] = useState(() => loadStamps(biteTime));
+  useEffect(() => setStamps(loadStamps(biteTime)), [biteTime]);
+  useEffect(() => {
+    setStamps((prev) => {
+      const next = stampCompleted(prev, currentIndex, biteTime, new Date());
+      if (next !== prev) saveStamps(biteTime, next);
+      return next;
+    });
+  }, [currentIndex, biteTime]);
+
+  const timelineSteps = useMemo(
+    () =>
+      buildTimeline({
+        t, now, currentIndex, stamps,
+        biteTime, victimLocation, victimLabel,
+        severity, recommendedHospital, emergencyContact,
+        sendState, online,
+      }),
+    [
+      t, now, currentIndex, stamps, biteTime, victimLocation, victimLabel,
+      severity, recommendedHospital, emergencyContact, sendState, online,
+    ]
+  );
+
+  const preparation = useMemo(() => buildPreparation({ severity, t }), [severity, t]);
+
+  // Compact notification status shown on the contact card (mirrors the timeline).
+  const contactStatus = useMemo(() => {
+    if (sendState === "sent") {
+      const stamp = stamps.notified;
+      const m = stamp
+        ? Math.max(0, Math.floor((now.getTime() - new Date(stamp).getTime()) / 60000))
+        : null;
+      return {
+        label: t.timeline.notifiedLabel,
+        tone: C.good,
+        pale: C.goodPale,
+        ago: m == null ? null : m <= 0 ? t.timeline.justNow : `${m} ${t.timeline.min} ${t.timeline.ago}`,
+      };
+    }
+    if (sendState === "queued" || !online) {
+      return { label: t.timeline.queuedLabel, tone: C.amber, pale: C.amberPale, ago: null };
+    }
+    return null;
+  }, [sendState, online, stamps.notified, now, t]);
+
   const sevTone = SEVERITY_TONE[severity];
 
   return (
@@ -141,6 +221,9 @@ export default function SOS() {
           small
         />
       </div>
+
+      {/* ── Emergency coordination timeline (live) ─────────────── */}
+      <EmergencyTimeline steps={timelineSteps} preparation={preparation} t={t} />
 
       {/* ── Emergency contact ──────────────────────────────────── */}
       <section className="rounded-2xl bg-white border" style={{ borderColor: "#E1EAE9" }}>
@@ -189,7 +272,7 @@ export default function SOS() {
             <div className="rounded-lg p-2 shrink-0" style={{ background: C.tealPale }}>
               <User size={18} style={{ color: C.teal }} />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold truncate" style={{ color: C.dark }}>
                 {emergencyContact?.name || t.sos.noContact}
               </div>
@@ -199,6 +282,22 @@ export default function SOS() {
                 </div>
               )}
             </div>
+            {/* Notification status — mirrors the timeline's contact step. */}
+            {emergencyContact && contactStatus && (
+              <div className="text-right shrink-0">
+                <span
+                  className="text-[11px] font-bold rounded-full px-2 py-0.5"
+                  style={{ background: contactStatus.pale, color: contactStatus.tone }}
+                >
+                  {contactStatus.label}
+                </span>
+                {contactStatus.ago && (
+                  <div className="text-[10px] mt-0.5" style={{ color: C.muted }}>
+                    {contactStatus.ago}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </section>
