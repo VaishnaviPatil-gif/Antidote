@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useEmergency } from "../context/EmergencyContext.jsx";
 import NavigationOverlay from "../components/NavigationOverlay.jsx";
+import ClinicianHandover from "../components/ClinicianHandover.jsx";
 
 // The interactive Leaflet map is lazy-loaded so the (heavy) mapping bundle only
 // downloads when the Routing screen is actually shown — keeping the rest of the
@@ -482,6 +483,19 @@ export default function AntidotePlusRouting() {
             </div>
           )}
         </div>
+
+        {/* ── Clinician handover card ─────────────────────────────
+            Auto-generated the moment the hospital is confirmed, so it can be
+            shown to the receiving doctors before the patient arrives. Reads
+            the same live routing decision (recommended facility) + context. */}
+        {recommended && (phase === "confirmed" || phase === "navigating") && (
+          <div className="px-4 pb-3">
+            <ClinicianHandover
+              hospital={recommended}
+              status={phase === "navigating" ? "enroute" : "confirmed"}
+            />
+          </div>
+        )}
 
         {/* ── Don't chase the snake ──────────────────────────────── */}
         <div className="px-4 pb-3">
