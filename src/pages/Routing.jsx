@@ -7,6 +7,7 @@ import {
 import { useEmergency } from "../context/EmergencyContext.jsx";
 import NavigationOverlay from "../components/NavigationOverlay.jsx";
 import ClinicianHandover from "../components/ClinicianHandover.jsx";
+import { SEED_FACILITIES, fetchHospitals } from "../lib/hospitals.js";
 
 // The interactive Leaflet map is lazy-loaded so the (heavy) mapping bundle only
 // downloads when the Routing screen is actually shown — keeping the rest of the
@@ -64,6 +65,9 @@ const T = {
     dontChase: "Don't chase the snake",
     dontChaseBody: "Treatment is based on your symptoms, not the species. Antivenom in India is polyvalent — it covers all four major venomous snakes. Photograph it only if completely safe.",
     trust: "Stock updated by hospital staff & ASHA workers. Demo inventory across Vikarabad district.",
+    stockLive: "Live stock", stockCached: "Cached stock", stockSeed: "Offline stock",
+    filterAll: "All", filterIcu: "ICU", filterGovt: "Govt", filterPrivate: "Private", filterBeds: "Has beds",
+    beds: "beds", noneMatch: "No facilities match this filter.",
     limited: "Limited — can stabilise, may refer onward", stale: "needs reconfirmation",
     reserving: "Reserving antivenom", relaying: "Relaying your symptoms & location",
     minsFurther: "further than the nearest clinic — but treatment is guaranteed here",
@@ -85,6 +89,9 @@ const T = {
     dontChase: "साँप का पीछा न करें",
     dontChaseBody: "इलाज प्रजाति पर नहीं, आपके लक्षणों पर आधारित है। भारत में एंटीवेनम पॉलीवैलेंट है — यह चारों प्रमुख विषैले साँपों पर काम करता है। फोटो तभी लें जब पूरी तरह सुरक्षित हो।",
     trust: "स्टॉक अस्पताल कर्मी व आशा कार्यकर्ता अपडेट करते हैं। विकाराबाद ज़िले का डेमो डेटा।",
+    stockLive: "लाइव स्टॉक", stockCached: "कैश स्टॉक", stockSeed: "ऑफ़लाइन स्टॉक",
+    filterAll: "सभी", filterIcu: "आईसीयू", filterGovt: "सरकारी", filterPrivate: "निजी", filterBeds: "बेड उपलब्ध",
+    beds: "बेड", noneMatch: "इस फ़िल्टर से कोई केंद्र नहीं मिला।",
     limited: "सीमित — स्थिर कर सकते हैं, आगे रेफर संभव", stale: "पुनः पुष्टि आवश्यक",
     reserving: "एंटीवेनम सुरक्षित किया जा रहा", relaying: "आपके लक्षण व लोकेशन भेजे जा रहे",
     minsFurther: "नज़दीकी क्लिनिक से दूर — पर यहाँ इलाज निश्चित है",
@@ -106,6 +113,9 @@ const T = {
     dontChase: "పామును వెంబడించవద్దు",
     dontChaseBody: "చికిత్స జాతిపై కాదు, మీ లక్షణాలపై ఆధారపడుతుంది. భారత్‌లో యాంటీవెనమ్ పాలీవేలెంట్ — నాలుగు ప్రధాన విషపూరిత పాములకూ పనిచేస్తుంది. పూర్తిగా సురక్షితమైతేనే ఫోటో తీయండి.",
     trust: "స్టాక్‌ను ఆసుపత్రి సిబ్బంది & ఆశా కార్యకర్తలు నవీకరిస్తారు. వికారాబాద్ జిల్లా డెమో డేటా.",
+    stockLive: "లైవ్ స్టాక్", stockCached: "కాష్ స్టాక్", stockSeed: "ఆఫ్‌లైన్ స్టాక్",
+    filterAll: "అన్నీ", filterIcu: "ఐసీయూ", filterGovt: "ప్రభుత్వం", filterPrivate: "ప్రైవేట్", filterBeds: "బెడ్‌లు ఉన్నాయి",
+    beds: "బెడ్‌లు", noneMatch: "ఈ ఫిల్టర్‌కు ఏ కేంద్రం సరిపోలేదు.",
     limited: "పరిమితం — స్థిరపరచవచ్చు, ముందుకు రెఫర్ చేయవచ్చు", stale: "మళ్లీ నిర్ధారణ అవసరం",
     reserving: "యాంటీవెనమ్ రిజర్వ్ చేస్తోంది", relaying: "మీ లక్షణాలు & లొకేషన్ పంపుతోంది",
     minsFurther: "దగ్గరి క్లినిక్ కంటే దూరం — కానీ ఇక్కడ చికిత్స ఖచ్చితం",
@@ -118,16 +128,8 @@ const T = {
 // Fallback victim location, used only when context has no victimLocation yet.
 const VICTIM = { lat: 17.270, lng: 77.770 };
 
-const FACILITIES = [
-  { id: "phc-marpally",  name: "PHC Marpally",            tierKey: "phc", lat: 17.262, lng: 77.785, vials: 0,   updatedMin: 185, icu: false },
-  { id: "phc-doulta",    name: "PHC Doultabad",           tierKey: "phc", lat: 17.305, lng: 77.730, vials: 2,   updatedMin: 540, icu: false },
-  { id: "chc-tandur",    name: "CHC Tandur",              tierKey: "chc", lat: 17.245, lng: 77.575, vials: 8,   updatedMin: 41,  icu: false },
-  { id: "ah-vikarabad",  name: "Area Hospital Vikarabad", tierKey: "ah",  lat: 17.337, lng: 77.905, vials: 24,  updatedMin: 12,  icu: false },
-  { id: "dh-vikarabad",  name: "District Hospital Vikarabad", tierKey: "dh", lat: 17.331, lng: 77.901, vials: 30, updatedMin: 25, icu: true },
-  { id: "chc-parigi",    name: "CHC Parigi",              tierKey: "chc", lat: 17.130, lng: 77.870, vials: 0,   updatedMin: 95,  icu: false },
-  { id: "gandhi",        name: "Gandhi Hospital, Secunderabad", tierKey: "tertiary", lat: 17.443, lng: 78.499, vials: 120, updatedMin: 18, icu: true },
-  { id: "nims",          name: "NIMS, Hyderabad",         tierKey: "tertiary", lat: 17.428, lng: 78.448, vials: 90, updatedMin: 33, icu: true },
-];
+// Facility inventory now comes from the live backend feed (src/lib/hospitals.js)
+// with a graceful cached→seed fallback. SEED_FACILITIES is the offline default.
 
 const RURAL_SPEED_KMH = 35;
 const STALE_MIN = 360; // 6 hours → flag for reconfirmation
@@ -169,6 +171,23 @@ export default function AntidotePlusRouting() {
   const [phase, setPhase] = useState("triage"); // triage | confirming | confirmed | navigating
   const t = T[lang];
 
+  // ── Live antivenom-stock feed ─────────────────────────────────────────────
+  // Start from the bundled seed so first paint is instant and offline-safe, then
+  // replace with the live backend feed (cached → seed fallback if unreachable).
+  const [facilities, setFacilities] = useState(SEED_FACILITIES);
+  const [stockSource, setStockSource] = useState("seed"); // live | cached | seed
+  useEffect(() => {
+    let alive = true;
+    fetchHospitals().then((res) => {
+      if (!alive) return;
+      setFacilities(res.facilities);
+      setStockSource(res.source);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // Victim location + bite time from context, with the seeded demo as fallback.
   const victim = victimLocation || VICTIM;
   const minsSinceBite = biteTime
@@ -179,13 +198,13 @@ export default function AntidotePlusRouting() {
 
   // Compute distances + classify every facility
   const ranked = useMemo(() => {
-    return FACILITIES.map((f) => {
+    return facilities.map((f) => {
       const km = haversineKm(victim, f);
       const tier = stockTier(f.vials, requiredVials);
       const stale = f.updatedMin > STALE_MIN && f.vials > 0;
       return { ...f, km, eta: etaMin(km), tier, stale };
     }).sort((a, b) => a.km - b.km);
-  }, [requiredVials, victim]);
+  }, [facilities, requiredVials, victim]);
 
   const nearest = ranked[0];
 
@@ -215,6 +234,19 @@ export default function AntidotePlusRouting() {
       ),
     [ranked, recommended]
   );
+
+  // ── Hospital intelligence: filter the alternatives list ───────────────────
+  // all | icu | govt | private | beds. Always sorted nearest-first (from ranked).
+  const [facilityFilter, setFacilityFilter] = useState("all");
+  const filteredOthers = useMemo(() => {
+    switch (facilityFilter) {
+      case "icu": return others.filter((f) => f.icu);
+      case "govt": return others.filter((f) => f.sector === "govt");
+      case "private": return others.filter((f) => f.sector === "private");
+      case "beds": return others.filter((f) => (f.beds ?? 0) > 0);
+      default: return others;
+    }
+  }, [others, facilityFilter]);
 
   // Write the routing decision back to context so SOS + the hospital view use
   // the real recommended facility (not the demo fallback).
@@ -508,13 +540,46 @@ export default function AntidotePlusRouting() {
           </div>
         </div>
 
-        {/* ── Other stocked facilities ───────────────────────────── */}
+        {/* ── Other stocked facilities + intelligence filters ─────── */}
         <div className="px-4 pb-4">
           <div className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: C.muted }}>
             {t.otherOpts}
           </div>
+
+          {/* Filter chips — ICU / govt / private / beds. Nearest-first order. */}
+          <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1">
+            {[
+              { key: "all", label: t.filterAll },
+              { key: "icu", label: t.filterIcu },
+              { key: "beds", label: t.filterBeds },
+              { key: "govt", label: t.filterGovt },
+              { key: "private", label: t.filterPrivate },
+            ].map((chip) => {
+              const active = facilityFilter === chip.key;
+              return (
+                <button
+                  key={chip.key}
+                  onClick={() => setFacilityFilter(chip.key)}
+                  className="shrink-0 rounded-full px-3 py-1 text-xs font-bold border transition-colors active:scale-95"
+                  style={
+                    active
+                      ? { background: C.teal, color: "#fff", borderColor: C.teal }
+                      : { background: "#fff", color: C.muted, borderColor: "#D7E3E2" }
+                  }
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="space-y-2">
-            {others.map((f) => (
+            {filteredOthers.length === 0 ? (
+              <div className="rounded-xl border border-dashed px-3 py-4 text-center text-xs" style={{ borderColor: "#C5DBD9", color: C.muted }}>
+                {t.noneMatch}
+              </div>
+            ) : (
+              filteredOthers.map((f) => (
               <div key={f.id} className="rounded-xl bg-white border px-3 py-2.5 flex items-center gap-3" style={{ borderColor: "#E1EAE9" }}>
                 <div
                   className="rounded-lg p-1.5 shrink-0"
@@ -524,8 +589,15 @@ export default function AntidotePlusRouting() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold truncate" style={{ color: C.dark }}>{f.name}</div>
-                  <div className="flex items-center gap-2.5 text-xs mt-0.5" style={{ color: C.muted }}>
+                  <div className="flex items-center gap-2 text-xs mt-0.5 flex-wrap" style={{ color: C.muted }}>
                     <span>{f.km.toFixed(0)} km · {f.eta} min</span>
+                    {f.icu && (
+                      <span className="font-bold rounded px-1" style={{ background: C.tealPale, color: C.teal }}>{t.icu}</span>
+                    )}
+                    <span className="font-semibold" style={{ color: f.sector === "private" ? C.amber : C.muted }}>
+                      {f.sector === "private" ? t.filterPrivate : t.filterGovt}
+                    </span>
+                    {(f.beds ?? 0) > 0 && <span>{f.beds} {t.beds}</span>}
                     {f.stale && <span style={{ color: C.amber }} className="font-semibold">⚠ {t.stale}</span>}
                   </div>
                 </div>
@@ -536,12 +608,37 @@ export default function AntidotePlusRouting() {
                   <div className="text-xs" style={{ color: C.muted }}>{t.vials}</div>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
         {/* ── Trust footer ───────────────────────────────────────── */}
         <div className="px-4 pb-6 pt-1 mt-auto">
+          {/* Stock-source badge — shows the feed is real (live/cached/seed). */}
+          <div className="mb-2">
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
+              style={
+                stockSource === "live"
+                  ? { background: C.goodPale, color: C.good }
+                  : stockSource === "cached"
+                  ? { background: C.amberPale, color: C.amber }
+                  : { background: "#EEF4F3", color: C.muted }
+              }
+            >
+              <span
+                className="inline-block rounded-full"
+                style={{
+                  width: 7,
+                  height: 7,
+                  background:
+                    stockSource === "live" ? C.good : stockSource === "cached" ? C.amber : C.muted,
+                }}
+              />
+              {stockSource === "live" ? t.stockLive : stockSource === "cached" ? t.stockCached : t.stockSeed}
+            </span>
+          </div>
           <div className="flex items-start gap-2 text-xs" style={{ color: C.muted }}>
             <RadioTower size={13} className="shrink-0 mt-0.5" style={{ color: C.tealLight }} />
             <span className="leading-snug">{t.trust}</span>
