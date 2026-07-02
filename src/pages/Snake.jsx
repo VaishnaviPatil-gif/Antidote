@@ -187,7 +187,7 @@ export default function Snake() {
           </div>
 
           {/* Card 1: Species Summary */}
-          <div className="rounded-xl border p-3.5 flex flex-col gap-2" style={{ borderColor: "#E1EAE9", background: FRAME_BG }}>
+          <div className="rounded-xl border p-3.5 flex flex-col gap-3.5" style={{ borderColor: "#E1EAE9", background: FRAME_BG }}>
             <div className="flex justify-between items-start gap-2">
               <div className="min-w-0">
                 <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
@@ -212,12 +212,32 @@ export default function Snake() {
               </span>
             </div>
 
-            <div className="mt-1">
-              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
-                {t.snake.scientificName}
+            <div className="grid grid-cols-2 gap-3 border-t pt-3" style={{ borderColor: "#F2F7F6" }}>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+                  {t.snake.scientificName}
+                </div>
+                <div className="text-xs font-semibold italic truncate" style={{ color: C.tealDark }}>
+                  {reportScientificName || "N/A"}
+                </div>
               </div>
-              <div className="text-xs font-semibold italic" style={{ color: C.tealDark }}>
-                {reportScientificName || "N/A"}
+
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+                  {t.snake.dangerLevel}
+                </div>
+                <div className="text-xs font-black truncate" style={{ color: result.danger_level?.toLowerCase()?.includes("harmless") ? C.good : C.danger }}>
+                  {result.danger_level || "Critical"}
+                </div>
+              </div>
+
+              <div className="col-span-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+                  {t.snake.venomType}
+                </div>
+                <div className="text-xs font-bold" style={{ color: C.dark }}>
+                  {result.venom_type || "N/A"}
+                </div>
               </div>
             </div>
           </div>
@@ -284,29 +304,65 @@ export default function Snake() {
             </div>
           </div>
 
-          {/* Numbered Medical Guidance (Shown when fallback is active) */}
-          {!isConfident && (
-            <div className="rounded-xl border p-3.5 flex flex-col gap-2" style={{ borderColor: "#E1EAE9" }}>
-              <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: C.dark }}>
-                {t.snake.fallback.whatToDo}
-              </div>
-              <ol className="flex flex-col gap-2 pl-0 m-0 list-none">
-                {t.snake.fallback.steps.map((step, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs leading-snug" style={{ color: C.dark }}>
-                    <span
-                      className="flex items-center justify-center rounded-full shrink-0 font-bold text-white text-[10px]"
-                      style={{ width: 16, height: 16, background: C.danger }}
-                    >
-                      {i + 1}
-                    </span>
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ol>
+          {/* Card 3: Herpetological Details */}
+          {(result.typical_habitat || (result.similar_snakes && result.similar_snakes.length > 0)) && (
+            <div className="rounded-xl border p-3.5 flex flex-col gap-3 bg-white" style={{ borderColor: "#E1EAE9" }}>
+              {result.typical_habitat && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+                    {t.snake.typicalHabitat}
+                  </div>
+                  <div className="text-xs leading-normal mt-0.5" style={{ color: C.dark }}>
+                    {result.typical_habitat}
+                  </div>
+                </div>
+              )}
+
+              {result.similar_snakes && result.similar_snakes.length > 0 && (
+                <div className="border-t pt-3" style={{ borderColor: "#F2F7F6" }}>
+                  <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+                    {t.snake.similarSnakes}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {result.similar_snakes.map((s, idx) => (
+                      <span
+                        key={idx}
+                        className="rounded-lg px-2 py-0.5 text-[10px] font-semibold border"
+                        style={{ background: "#F2F7F6", borderColor: "#E1EAE9", color: C.tealDark }}
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Card 3: Medical Protocol & Disclaimer */}
+          {/* Card 4: First Aid Recommendations */}
+          <div className="rounded-xl border p-3.5 flex flex-col gap-3 bg-white" style={{ borderColor: "#E1EAE9" }}>
+            <div className="text-xs font-bold uppercase tracking-wider" style={{ color: C.dark }}>
+              {t.snake.firstAidTitle}
+            </div>
+            <ol className="flex flex-col gap-2 pl-0 m-0 list-none">
+              {(result.first_aid_steps && result.first_aid_steps.length > 0
+                ? result.first_aid_steps
+                : t.snake.fallback.steps
+              ).map((step, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs leading-snug" style={{ color: C.dark }}>
+                  <span
+                    className="flex items-center justify-center rounded-full shrink-0 font-bold text-white text-[10px]"
+                    style={{ width: 16, height: 16, background: isConfident ? C.teal : C.danger }}
+                  >
+                    {i + 1}
+                  </span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Card 5: Medical Protocol & Disclaimer */}
           <div 
             className="rounded-xl p-3.5 flex flex-col gap-1.5 border" 
             style={{ 

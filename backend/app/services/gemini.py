@@ -35,6 +35,17 @@ SAFE_DEFAULT = {
     "validation_reason": "Process failed",
     "confidence": 0.0,
     "venomous": True,
+    "venom_type": "Unknown (Assume Neurotoxic & Hemotoxic)",
+    "danger_level": "Critical (Safety Fallback Active)",
+    "similar_snakes": [],
+    "typical_habitat": "Rural and agricultural regions of South Asia",
+    "first_aid_steps": [
+        "Keep calm and minimize movement.",
+        "Immobilize the bitten limb at or below heart level.",
+        "Remove tight jewelry, watches, or clothing.",
+        "Reach a medical facility with antivenom immediately.",
+        "DO NOT cut, suck, or apply tourniquets."
+    ],
 }
 
 # Species labels (any casing) that mean "no identification".
@@ -72,15 +83,7 @@ class ValidationResult:
 
 
 class GeminiIdentification(BaseModel):
-    """Schema for the model's identification JSON (structural validation).
-
-    Structural only — semantic/medical rules live in `_validate_identification`.
-    Unknown keys are ignored and malformed values are coerced to safe defaults
-    (never raising), so a junk response degrades to "not identified" instead of
-    crashing the endpoint. `confidence` is kept raw here and range-checked by
-    `_normalise_confidence` so impossible values (-5, 300, "very sure") are
-    rejected rather than silently clamped.
-    """
+    """Schema for the model's identification JSON (structural validation)."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -89,8 +92,13 @@ class GeminiIdentification(BaseModel):
     species: str | None = None
     common_name: str | None = None
     scientific_name: str | None = None
-    venomous: bool = True  # assume venomous unless the model clearly says otherwise
+    venomous: bool = True
     reasoning: list[str] = Field(default_factory=list)
+    venom_type: str | None = None
+    danger_level: str | None = None
+    similar_snakes: list[str] = Field(default_factory=list)
+    typical_habitat: str | None = None
+    first_aid_steps: list[str] = Field(default_factory=list)
 
     @field_validator("identified", "venomous", mode="before")
     @classmethod
@@ -101,17 +109,16 @@ class GeminiIdentification(BaseModel):
             return v.strip().lower() in {"true", "yes", "y", "1"}
         if isinstance(v, (int, float)):
             return bool(v)
-        # Missing / junk → safe default: identified=False, venomous=True.
         return info.field_name == "venomous"
 
-    @field_validator("species", "common_name", "scientific_name", mode="before")
+    @field_validator("species", "common_name", "scientific_name", "venom_type", "danger_level", "typical_habitat", mode="before")
     @classmethod
     def _coerce_optional_str(cls, v):
         return None if v is None else str(v)
 
-    @field_validator("reasoning", mode="before")
+    @field_validator("reasoning", "similar_snakes", "first_aid_steps", mode="before")
     @classmethod
-    def _coerce_reasoning(cls, v):
+    def _coerce_lists(cls, v):
         if v is None:
             return []
         if isinstance(v, str):
@@ -147,7 +154,11 @@ _IDENTIFY_PROMPT = (
     "OUTPUT - return ONLY valid minified JSON, with no text outside it.\n"
     'If identified: {"identified":true,"species":<name>,"common_name":<common '
     'name>,"scientific_name":<latin name>,"venomous":<true|false>,"confidence":'
-    '<90-100>,"reasoning":[<visible cues you actually saw>]}.\n'
+    '<90-100>,"reasoning":[<visible cues you actually saw>],"venom_type":'
+    '<Neurotoxic|Hemotoxic|Cytotoxic|None>,"danger_level":<Critical|Highly '
+    'Dangerous|Moderately Dangerous|Harmless>,"similar_snakes":[<1-2 similar looking '
+    'snakes>],"typical_habitat":<habitat description>,"first_aid_steps":[<3-5 '
+    'key safety-first first aid steps>]}.\n'
     'Otherwise: {"identified":false,"confidence":<0-89>,"reason":"Insufficient '
     'visual evidence for safe identification.","possible_matches":[<0-2 '
     "plausible names>]}.\n"
@@ -373,6 +384,17 @@ def identify(image_b64: str, mime: str = "image/jpeg") -> dict:
                 "validation_reason": None,
                 "confidence": confidence,
                 "venomous": gm.venomous,
+                "venom_type": (gm.venom_type or ("Neurotoxic & Hemotoxic" if gm.venomous else "None")).strip(),
+                "danger_level": (gm.danger_level or ("Highly Dangerous" if gm.venomous else "Harmless")).strip(),
+                "similar_snakes": gm.similar_snakes or [],
+                "typical_habitat": (gm.typical_habitat or "Vikarabad region").strip(),
+                "first_aid_steps": gm.first_aid_steps or [
+                    "Keep calm and minimize movement.",
+                    "Immobilize the bitten limb at or below heart level.",
+                    "Remove tight jewelry, watches, or clothing.",
+                    "Reach a medical facility with antivenom immediately.",
+                    "DO NOT cut, suck, or apply tourniquets."
+                ]
             }
             logger.info("identify: validation -> ACCEPTED (%s, %.2f)", species, confidence)
         else:
@@ -390,6 +412,17 @@ def identify(image_b64: str, mime: str = "image/jpeg") -> dict:
                 "validation_reason": verdict.reason,
                 "confidence": display_conf,
                 "venomous": True,
+                "venom_type": "Unknown (Assume Neurotoxic & Hemotoxic)",
+                "danger_level": "Critical (Safety Fallback Active)",
+                "similar_snakes": [],
+                "typical_habitat": "Rural and agricultural regions of South Asia",
+                "first_aid_steps": [
+                    "Keep calm and minimize movement.",
+                    "Immobilize the bitten limb at or below heart level.",
+                    "Remove tight jewelry, watches, or clothing.",
+                    "Reach a medical facility with antivenom immediately.",
+                    "DO NOT cut, suck, or apply tourniquets."
+                ]
             }
             logger.info("identify: validation -> REJECTED (reason: %s)", verdict.reason)
 

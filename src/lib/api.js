@@ -25,7 +25,18 @@ const SAFE_DEFAULT = {
   validation_status: "Fallback Active",
   validation_reason: "Process failed",
   confidence: 0,
-  venomous: true
+  venomous: true,
+  venom_type: "Unknown (Assume Neurotoxic & Hemotoxic)",
+  danger_level: "Critical (Safety Fallback Active)",
+  similar_snakes: [],
+  typical_habitat: "Rural and agricultural regions of South Asia",
+  first_aid_steps: [
+    "Keep calm and minimize movement.",
+    "Immobilize the bitten limb at or below heart level.",
+    "Remove tight jewelry, watches, or clothing.",
+    "Reach a medical facility with antivenom immediately.",
+    "DO NOT cut, suck, or apply tourniquets."
+  ]
 };
 
 /**

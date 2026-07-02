@@ -28,6 +28,11 @@ class IdentifyResponse(BaseModel):
     reasoning: list[str] | None = Field(default_factory=list, description="Reasoning or diagnostic features.")
     validation_status: str | None = Field(default=None, description="Validation status of the analysis.")
     validation_reason: str | None = Field(default=None, description="Reason for validation state.")
+    venom_type: str | None = Field(default=None, description="Type of venom (e.g. Neurotoxic, Hemotoxic, None).")
+    danger_level: str | None = Field(default=None, description="Dangerous level classification.")
+    similar_snakes: list[str] | None = Field(default_factory=list, description="Similar looking snakes.")
+    typical_habitat: str | None = Field(default=None, description="Typical habitat of the species.")
+    first_aid_steps: list[str] | None = Field(default_factory=list, description="Emergency first aid steps.")
 
 
 # ── /api/summarize ─────────────────────────────────────────────────────────
