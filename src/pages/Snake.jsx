@@ -4,7 +4,10 @@ import {
   Camera, Loader2, AlertTriangle, ShieldAlert, X, RefreshCw,
   ChevronRight, SkipForward, Info,
 } from "lucide-react";
-import { C } from "../theme.js";
+import { C, FRAME_BG } from "../theme.js";
+
+
+
 import { tFor } from "../i18n.js";
 import { useEmergency } from "../context/EmergencyContext.jsx";
 import { identifySnake } from "../lib/api.js";
@@ -68,15 +71,20 @@ export default function Snake() {
   const isConfident =
     result && result.confidence >= LOW_CONFIDENCE && result.species !== "Unidentified";
 
-  // Fallback framing — derived ONLY from the existing API response (the `_failed`
-  // transport flag + the returned confidence). No backend change: we surface the
-  // single honest reason we can actually detect, never an invented one.
+  // Fallback framing — derived ONLY from the existing API response
   const fbConfidencePct = Math.round((result?.confidence || 0) * 100);
   const fbReason = failed
     ? t.snake.fallback.reasons.failed
     : result?.confidence > 0
     ? t.snake.fallback.reasons.lowConfidence
     : t.snake.fallback.reasons.unverified;
+
+  // Compute herpetological report details directly from API result
+  const reportCommonName = result?.common_name || t.snake.unidentified;
+  const reportScientificName = result?.scientific_name;
+  const reportReasoning = Array.isArray(result?.reasoning)
+    ? result.reasoning
+    : [t.snake.fallback.reasons.unverified];
 
   return (
     <div className="px-4 pt-4 pb-6 flex flex-col gap-4">
@@ -157,160 +165,165 @@ export default function Snake() {
         </div>
       )}
 
-      {/* ── RESULT ─────────────────────────────────────────────── */}
+      {/* ── RESULT (Unified Medical Report Card) ────────────────── */}
       {status === "result" && result && (
-        <>
-          {isConfident ? (
-            /* Confident-enough guess — still clearly "not a diagnosis". */
-            <div className="rounded-2xl bg-white border overflow-hidden" style={{ borderColor: "#E1EAE9" }}>
-              <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-                <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: C.muted }}>
-                  {t.snake.guess}
+        <div 
+          className="rounded-2xl border bg-white p-4 flex flex-col gap-4 shadow-sm"
+          style={{ borderColor: "#C5DBD9" }}
+        >
+          {/* Report Header */}
+          <div className="flex items-center gap-2 pb-3 border-b" style={{ borderColor: "#E1EAE9" }}>
+            <div className="rounded-lg p-2 shrink-0" style={{ background: C.tealPale }}>
+              <Camera size={20} style={{ color: C.teal }} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold uppercase tracking-wider" style={{ color: C.teal }}>
+                {t.snake.reportTitle}
+              </div>
+              <div className="text-[10px] leading-tight" style={{ color: C.muted }}>
+                {t.snake.metadataTitle} • {new Date().toLocaleDateString(language === "en" ? "en-US" : language === "hi" ? "hi-IN" : "te-IN")}
+              </div>
+            </div>
+          </div>
+
+          {/* Card 1: Species Summary */}
+          <div className="rounded-xl border p-3.5 flex flex-col gap-2" style={{ borderColor: "#E1EAE9", background: FRAME_BG }}>
+            <div className="flex justify-between items-start gap-2">
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+                  {t.snake.commonName}
                 </div>
-                <span
-                  className="text-xs font-bold rounded-full px-2 py-0.5 flex items-center gap-1"
-                  style={{
-                    background: result.venomous ? C.dangerPale : C.goodPale,
-                    color: result.venomous ? C.danger : C.good,
-                  }}
-                >
-                  <AlertTriangle size={11} />
-                  {result.venomous ? t.snake.venomous : "—"}
+                <div className="text-base font-extrabold leading-tight break-words" style={{ color: C.dark }}>
+                  {reportCommonName}
+                </div>
+              </div>
+              
+              {/* Venomous / Non-Venomous Badge */}
+              <span
+                className="text-[10px] font-extrabold rounded-full px-2.5 py-1 flex items-center gap-1 shrink-0 shadow-sm"
+                style={{
+                  background: result.venomous ? C.dangerPale : C.goodPale,
+                  color: result.venomous ? C.danger : C.good,
+                  border: `1px solid ${result.venomous ? "#F0CFC9" : "#CBE7DB"}`
+                }}
+              >
+                <AlertTriangle size={10} />
+                {result.venomous ? t.snake.venomousBadge : t.snake.nonVenomousBadge}
+              </span>
+            </div>
+
+            <div className="mt-1">
+              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+                {t.snake.scientificName}
+              </div>
+              <div className="text-xs font-semibold italic" style={{ color: C.tealDark }}>
+                {reportScientificName || "N/A"}
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Diagnostics & Confidence */}
+          <div className="rounded-xl border p-3.5 flex flex-col gap-3" style={{ borderColor: "#E1EAE9" }}>
+            {/* Confidence Progress Bar */}
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1.5" style={{ color: C.muted }}>
+                <span className="font-bold">{t.snake.confidence}</span>
+                <span className="font-extrabold tabular-nums" style={{ color: isConfident ? C.teal : C.danger }}>
+                  {fbConfidencePct}%
                 </span>
               </div>
-              <div className="px-4 pb-3">
-                <div className="text-xl font-extrabold leading-tight" style={{ color: C.dark }}>
-                  {result.species}
+              <div className="h-2.5 rounded-full overflow-hidden" style={{ background: "#E8F0EF" }}>
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ 
+                    width: `${fbConfidencePct}%`, 
+                    background: isConfident ? C.teal : C.danger 
+                  }}
+                />
+              </div>
+              {!isConfident && (
+                <div className="text-[10px] mt-1 font-medium" style={{ color: C.danger }}>
+                  * {t.snake.fallback.belowThreshold}
                 </div>
+              )}
+            </div>
 
-                {/* Confidence bar */}
-                <div className="mt-2">
-                  <div className="flex items-center justify-between text-xs mb-1" style={{ color: C.muted }}>
-                    <span>{t.snake.confidence}</span>
-                    <span className="font-bold tabular-nums">
-                      {Math.round(result.confidence * 100)}%
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "#E8F0EF" }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${Math.round(result.confidence * 100)}%`, background: C.teal }}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 mt-2 text-xs" style={{ color: C.muted }}>
-                  <Info size={12} />
-                  {t.common.assistedNote}
-                </div>
+            {/* Validation Status */}
+            <div className="pt-2.5 border-t" style={{ borderColor: "#E1EAE9" }}>
+              <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: C.muted }}>
+                {t.snake.validationStatus}
+              </div>
+              <div 
+                className="text-xs font-bold rounded-lg p-2 flex items-center gap-2"
+                style={{
+                  background: isConfident ? C.goodPale : C.dangerPale,
+                  color: isConfident ? C.good : C.danger,
+                  border: `1px solid ${isConfident ? "#CBE7DB" : "#F0CFC9"}`
+                }}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: isConfident ? C.good : C.danger }} />
+                <span className="leading-tight">
+                  {isConfident ? t.snake.validated : t.snake.fallbackActive}
+                </span>
               </div>
             </div>
-          ) : (
-            /* ── Safety-protocol fallback (deliberate, not an error) ──────────
-               Low confidence / unidentified / API failure / unprocessable image
-               all resolve here to the same medical default: assume venomous. */
-            <div className="flex flex-col gap-3">
-              {/* Warning card — Safety First + primary headline + why + confidence */}
-              <div
-                className="rounded-2xl border overflow-hidden"
-                style={{ borderColor: "#F0CFC9", background: C.dangerPale }}
-              >
-                {/* Header: Safety First */}
-                <div className="px-4 pt-3 pb-2 flex items-start gap-3">
-                  <div className="rounded-lg p-1.5 shrink-0" style={{ background: "#F6D9D4" }}>
-                    <ShieldAlert size={18} style={{ color: C.danger }} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold uppercase tracking-wide" style={{ color: C.danger }}>
-                      {t.snake.fallback.title}
-                    </div>
-                    <div className="text-xs leading-snug mt-0.5" style={{ color: C.dark }}>
-                      {t.snake.fallback.titleBody}
-                    </div>
-                  </div>
-                </div>
 
-                {/* Primary warning + guideline rationale */}
-                <div className="px-4 pb-3">
-                  <div className="rounded-xl bg-white px-3 py-3" style={{ border: "1px solid #F0CFC9" }}>
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle size={18} style={{ color: C.danger }} className="shrink-0 mt-0.5" />
-                      <div className="text-sm font-extrabold leading-snug" style={{ color: C.danger }}>
-                        {t.snake.fallback.headline}
-                      </div>
-                    </div>
-                    <p className="text-xs leading-snug mt-2" style={{ color: C.dark }}>
-                      {t.snake.fallback.body1}
-                    </p>
-                    <p className="text-xs leading-snug mt-1.5" style={{ color: C.dark }}>
-                      {t.snake.fallback.body2}
-                    </p>
-
-                    {/* One detected reason (why) */}
-                    <div className="flex items-center gap-1.5 mt-2.5 text-xs font-semibold" style={{ color: C.danger }}>
-                      <Info size={12} className="shrink-0" />
-                      {fbReason}
-                    </div>
-
-                    {/* Confidence, only when the model returned one below threshold */}
-                    {fbConfidencePct > 0 && (
-                      <div className="mt-3 rounded-lg px-3 py-2" style={{ background: C.dangerPale }}>
-                        <div className="flex items-center justify-between text-xs" style={{ color: C.muted }}>
-                          <span>{t.snake.fallback.confidenceLabel}</span>
-                          <span className="font-extrabold tabular-nums" style={{ color: C.danger }}>
-                            {fbConfidencePct}%
-                          </span>
-                        </div>
-                        <div className="h-1.5 rounded-full overflow-hidden mt-1.5" style={{ background: "#F6D9D4" }}>
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${fbConfidencePct}%`, background: C.danger }}
-                          />
-                        </div>
-                        <div className="text-[11px] mt-1" style={{ color: C.muted }}>
-                          {t.snake.fallback.belowThreshold}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+            {/* Diagnostic Observations */}
+            <div className="pt-2.5 border-t" style={{ borderColor: "#E1EAE9" }}>
+              <div className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: C.muted }}>
+                {t.snake.observations}
               </div>
+              <ul className="flex flex-col gap-1.5 list-none pl-0 m-0">
+                {reportReasoning.map((item, idx) => (
+                  <li key={idx} className="text-xs leading-snug flex items-start gap-2" style={{ color: C.dark }}>
+                    <span className="text-[14px] leading-none shrink-0" style={{ color: isConfident ? C.teal : C.danger }}>•</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
 
-              {/* What to do now — numbered medical guidance */}
-              <div className="rounded-2xl bg-white border px-4 py-3" style={{ borderColor: "#E1EAE9" }}>
-                <div className="text-sm font-bold mb-2" style={{ color: C.dark }}>
-                  {t.snake.fallback.whatToDo}
-                </div>
-                <ol className="flex flex-col gap-1.5">
-                  {t.snake.fallback.steps.map((step, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs leading-snug" style={{ color: C.dark }}>
-                      <span
-                        className="flex items-center justify-center rounded-full shrink-0 font-bold text-white"
-                        style={{ width: 18, height: 18, background: C.teal, fontSize: 11 }}
-                      >
-                        {i + 1}
-                      </span>
-                      {step}
-                    </li>
-                  ))}
-                </ol>
+          {/* Numbered Medical Guidance (Shown when fallback is active) */}
+          {!isConfident && (
+            <div className="rounded-xl border p-3.5 flex flex-col gap-2" style={{ borderColor: "#E1EAE9" }}>
+              <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: C.dark }}>
+                {t.snake.fallback.whatToDo}
               </div>
-
-              {/* Remember — AI is only an assistant */}
-              <div className="rounded-2xl px-4 py-3 flex items-start gap-3" style={{ background: C.tealPale }}>
-                <Info size={18} style={{ color: C.teal }} className="shrink-0 mt-0.5" />
-                <div>
-                  <div className="text-sm font-bold" style={{ color: C.tealDark }}>
-                    {t.snake.fallback.rememberTitle}
-                  </div>
-                  <div className="text-xs leading-snug mt-0.5" style={{ color: C.muted }}>
-                    {t.snake.fallback.rememberBody}
-                  </div>
-                </div>
-              </div>
+              <ol className="flex flex-col gap-2 pl-0 m-0 list-none">
+                {t.snake.fallback.steps.map((step, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs leading-snug" style={{ color: C.dark }}>
+                    <span
+                      className="flex items-center justify-center rounded-full shrink-0 font-bold text-white text-[10px]"
+                      style={{ width: 16, height: 16, background: C.danger }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
             </div>
           )}
-        </>
+
+          {/* Card 3: Medical Protocol & Disclaimer */}
+          <div 
+            className="rounded-xl p-3.5 flex flex-col gap-1.5 border" 
+            style={{ 
+              background: C.tealPale, 
+              borderColor: "#C5DBD9",
+              color: C.tealDark 
+            }}
+          >
+            <div className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <Info size={12} style={{ color: C.teal }} />
+              {t.snake.disclaimerTitle}
+            </div>
+            <div className="text-[11px] leading-relaxed" style={{ color: C.muted }}>
+              {t.snake.disclaimerBody}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Don't chase the snake (reused routing strings) ─────── */}

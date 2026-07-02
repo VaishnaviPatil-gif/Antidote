@@ -23,6 +23,11 @@ class IdentifyResponse(BaseModel):
     species: str = Field(..., description='Best guess, or "Unidentified".')
     confidence: float = Field(..., ge=0.0, le=1.0, description="0–1 confidence.")
     venomous: bool = Field(..., description="Assume venomous unless clearly not.")
+    common_name: str | None = Field(default=None, description="Common name of the species.")
+    scientific_name: str | None = Field(default=None, description="Scientific name of the species.")
+    reasoning: list[str] | None = Field(default_factory=list, description="Reasoning or diagnostic features.")
+    validation_status: str | None = Field(default=None, description="Validation status of the analysis.")
+    validation_reason: str | None = Field(default=None, description="Reason for validation state.")
 
 
 # ── /api/summarize ─────────────────────────────────────────────────────────
