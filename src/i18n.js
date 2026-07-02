@@ -328,6 +328,37 @@ export const T = {
       }
     },
 
+    resources: {
+      title: "Resource Tracker",
+      subtitle: "Live telemetry of emergency responders dispatched to your location.",
+      back: "Back",
+      ambulance: "108 Ambulance",
+      asha: "ASHA Health Worker",
+      police: "Local Police Patrol",
+      hospital: "Receiving Hospital",
+      call: "Call",
+      statuses: {
+        dispatched: "Dispatched",
+        enroute: "En Route to Victim",
+        arrivedLoc: "At Victim Location",
+        transporting: "Transporting to Hospital",
+        arrivedHosp: "Arrived at Hospital",
+        notified: "Notified & Briefed",
+        firstAid: "First Aid Administered",
+        handover: "Handover Completed",
+        alerted: "Alerted",
+        routeSecured: "Route Secured",
+        clearance: "Traffic Clearance Confirmed",
+        prepIcu: "Preparing ICU Bed",
+        asvPrep: "ASV Dose Prepared",
+        triageAssembled: "Triage Team Ready",
+        readyToReceive: "Ready to Receive Patient"
+      },
+      liveTimeline: "Chronological Dispatch Logs",
+      telemetryConnected: "Telemetry Connected",
+      autoUpdateStatus: "Statuses update dynamically in real time."
+    },
+
     // ── High-risk indicator (prevention) ──
     risk: {
       title: "High snakebite risk indicator",
@@ -765,6 +796,37 @@ export const T = {
       }
     },
 
+    resources: {
+      title: "संसाधन ट्रैकर",
+      subtitle: "आपके स्थान पर भेजे गए आपातकालीन उत्तरदाताओं की लाइव टेलीमेट्री।",
+      back: "पीछे",
+      ambulance: "108 एम्बुलेंस",
+      asha: "आशा स्वास्थ्य कार्यकर्ता",
+      police: "स्थानीय पुलिस गश्त",
+      hospital: "प्राप्तकर्ता अस्पताल",
+      call: "कॉल करें",
+      statuses: {
+        dispatched: "रवाना किया गया",
+        enroute: "पीड़ित के मार्ग में",
+        arrivedLoc: "पीड़ित के स्थान पर",
+        transporting: "अस्पताल ले जाया जा रहा है",
+        arrivedHosp: "अस्पताल पहुंचे",
+        notified: "अधिसूचित और सूचित",
+        firstAid: "प्राथमिक चिकित्सा दी गई",
+        handover: "हैंडओवर पूरा हुआ",
+        alerted: "सचेत किया गया",
+        routeSecured: "मार्ग सुरक्षित",
+        clearance: "ट्रैफिक क्लीयरेंस की पुष्टि",
+        prepIcu: "आईसीयू बेड की तैयारी",
+        asvPrep: "ASV खुराक तैयार",
+        triageAssembled: "ट्राइएज टीम तैयार",
+        readyToReceive: "रोगी प्राप्त करने के लिए तैयार"
+      },
+      liveTimeline: "कालानुक्रमिक प्रेषण लॉग",
+      telemetryConnected: "टेलीमेट्री कनेक्टेड",
+      autoUpdateStatus: "स्थितियां वास्तविक समय में गतिशील रूप से अपडेट होती हैं।"
+    },
+
     risk: {
       title: "सर्पदंश उच्च जोखिम सूचक",
       subtitle: "आपके क्षेत्र का सामान्य सूचक — आपके लिए पूर्वानुमान नहीं।",
@@ -1198,6 +1260,37 @@ export const T = {
         travel: "సగటు ప్రయాణ సమయం",
         treatment: "డోర్-టు-నీడిల్ ASV"
       }
+    },
+
+    resources: {
+      title: "వనరుల ట్రాకర్",
+      subtitle: "మీ ప్రాంతానికి పంపబడిన అత్యవసర రెస్పాండర్ల లైవ్ టెలిమెట్రీ.",
+      back: "వెనుకకు",
+      ambulance: "108 అంబులెన్స్",
+      asha: "ఆశా ఆరోగ్య కార్యకర్త",
+      police: "స్థానిక పోలీస్ పెట్రోల్",
+      hospital: "చేరుకునే ఆసుపత్రి",
+      call: "కాల్ చేయి",
+      statuses: {
+        dispatched: "బయలుదేరింది",
+        enroute: "బాధితుడి వద్దకు మార్గంలో ఉంది",
+        arrivedLoc: "బాధితుడి స్థానానికి చేరుకుంది",
+        transporting: "ఆసుపత్రికి తరలిస్తున్నారు",
+        arrivedHosp: "ఆసుపత్రికి చేరుకున్నారు",
+        notified: "సమాచారం అందించబడింది",
+        firstAid: "ప్రథమ చికిత్స అందించబడింది",
+        handover: "హ్యాండోవర్ పూర్తయింది",
+        alerted: "అప్రమత్తం చేయబడింది",
+        routeSecured: "మార్గం భద్రపరచబడింది",
+        clearance: "ట్రాఫిక్ క్లియరెన్స్ నిర్ధారించబడింది",
+        prepIcu: "ఐసీయూ బెడ్ సిద్ధమవుతోంది",
+        asvPrep: "ASV డోస్ సిద్ధం చేయబడింది",
+        triageAssembled: "ట్రయేజ్ బృందం సిద్ధంగా ఉంది",
+        readyToReceive: "రోగిని స్వీకరించడానికి సిద్ధంగా ఉంది"
+      },
+      liveTimeline: "వివరాల పంపకాల లాగ్‌లు",
+      telemetryConnected: "టెలిమెట్రీ కనెక్ట్ చేయబడింది",
+      autoUpdateStatus: "స్థితులు నిజ సమయంలో డైనమిక్‌గా నవీకరించబడతాయి."
     },
 
     risk: {
