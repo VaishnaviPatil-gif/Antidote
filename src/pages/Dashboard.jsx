@@ -8,6 +8,7 @@ import { C, FRAME_BG, SEVERITY_TONE, SEVERITY_PALE } from "../theme.js";
 import { tFor } from "../i18n.js";
 import { useEmergency, minutesSinceBite } from "../context/EmergencyContext.jsx";
 import { requiredVialsFor, DEMO_RECOMMENDED } from "../lib/handover.js";
+import { MOCK_INCOMING_CASES } from "../lib/hospitals.js";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -43,44 +44,14 @@ export default function Dashboard() {
   }, [liveStatus]);
 
   // Initialized mock cases with target times anchored relative to page load time
-  const [mockCases, setMockCases] = useState(() => [
-    {
-      id: "P-882-901",
-      biteTime: new Date(Date.now() - 25 * 60000),
-      severity: "severe",
-      species: "Indian Cobra",
-      confidence: 0.95,
-      gps: "17.305, 77.730",
-      eta: 30,
-      assignedHospital: "District Hospital Vikarabad",
-      targetTime: new Date(Date.now() + 5 * 60000 + 34 * 1000), // arrives in ~5.5 mins
-      status: "enroute"
-    },
-    {
-      id: "P-112-402",
-      biteTime: new Date(Date.now() - 10 * 60000),
-      severity: "moderate",
-      species: "Russell's Viper",
-      confidence: 0.91,
-      gps: "17.130, 77.870",
-      eta: 20,
-      assignedHospital: "Area Hospital Tandur",
-      targetTime: new Date(Date.now() + 10 * 60000), // arrives in 10 mins
-      status: "preparing"
-    },
-    {
-      id: "P-491-008",
-      biteTime: new Date(Date.now() - 95 * 60000),
-      severity: "mild",
-      species: "Common Sand Boa",
-      confidence: 0.78,
-      gps: "17.245, 77.575",
-      eta: 15,
-      assignedHospital: "District Hospital Vikarabad",
-      targetTime: new Date(Date.now() - 80 * 60000), // arrived long ago
-      status: "arrived"
-    }
-  ]);
+  const [mockCases, setMockCases] = useState(() =>
+    MOCK_INCOMING_CASES.map(c => ({
+      ...c,
+      biteTime: new Date(Date.now() - (c.id === "P-882-901" ? 25 : c.id === "P-112-402" ? 10 : 95) * 60000),
+      targetTime: new Date(Date.now() + (c.id === "P-882-901" ? (5 * 60 + 34) * 1000 : c.id === "P-112-402" ? 10 * 60000 : -80 * 60000)),
+      assignedHospital: c.assignedHospitalName
+    }))
+  );
 
   // Consolidate live case from EmergencyContext (if a bite has been logged)
   const liveCase = useMemo(() => {
