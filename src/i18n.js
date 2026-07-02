@@ -261,6 +261,34 @@ export const T = {
         `${vials} ASV vials · emergency physician${icu ? " · ICU on standby" : ""}`,
     },
 
+    // ── Hospital dashboard view ──
+    dashboard: {
+      title: "Hospital Dashboard",
+      subtitle: "Live triage & incoming patient emergency tracking.",
+      patientId: "Patient ID",
+      biteTime: "Time of Bite",
+      eta: "ETA",
+      severity: "Severity",
+      snakeReport: "Snake Identification",
+      location: "GPS Location",
+      dose: "Antivenom Dose",
+      hospital: "Assigned Hospital",
+      status: "Status",
+      noCases: "No active incoming emergency cases",
+      filters: "Filters",
+      all: "All",
+      countdown: "Time to Arrival",
+      arrived: "Arrived",
+      late: "Late / Arrived",
+      statuses: {
+        preparing: "Preparing",
+        enroute: "Ambulance En Route",
+        arrived: "Patient Arrived",
+        started: "Treatment Started"
+      },
+      vialsVal: (vials) => `${vials} vials`,
+    },
+
     // ── High-risk indicator (prevention) ──
     risk: {
       title: "High snakebite risk indicator",
@@ -298,6 +326,7 @@ export const T = {
         "/routing": "Find antivenom",
         "/sos": "SOS alert",
         "/hospital": "Hospital view",
+        "/dashboard": "Hospital Dashboard",
       },
     },
 
@@ -630,6 +659,34 @@ export const T = {
         `${vials} ASV शीशियाँ · आपातकालीन चिकित्सक${icu ? " · आईसीयू तैयार" : ""}`,
     },
 
+    // ── Hospital dashboard view ──
+    dashboard: {
+      title: "अस्पताल डैशबोर्ड",
+      subtitle: "लाइव ट्राइएज और आने वाले रोगी की आपातकालीन ट्रैकिंग।",
+      patientId: "रोगी आईडी",
+      biteTime: "काटने का समय",
+      eta: "ETA",
+      severity: "गंभीरता",
+      snakeReport: "साँप की पहचान",
+      location: "जीपीएस स्थान",
+      dose: "एंटीवेनम खुराक",
+      hospital: "आवंटित अस्पताल",
+      status: "स्थिति",
+      noCases: "कोई सक्रिय आने वाला आपातकालीन मामला नहीं है",
+      filters: "फ़िल्टर",
+      all: "सभी",
+      countdown: "पहुंचने का समय",
+      arrived: "पहुंच गए",
+      late: "देरी / पहुंचे",
+      statuses: {
+        preparing: "तैयारी",
+        enroute: "एम्बुलेंस मार्ग में",
+        arrived: "रोगी पहुंचा",
+        started: "उपचार शुरू"
+      },
+      vialsVal: (vials) => `${vials} शीशियां`,
+    },
+
     risk: {
       title: "सर्पदंश उच्च जोखिम सूचक",
       subtitle: "आपके क्षेत्र का सामान्य सूचक — आपके लिए पूर्वानुमान नहीं।",
@@ -665,6 +722,7 @@ export const T = {
         "/routing": "एंटीवेनम खोजें",
         "/sos": "एसओएस अलर्ट",
         "/hospital": "अस्पताल दृश्य",
+        "/dashboard": "अस्पताल डैशबोर्ड",
       },
     },
 
@@ -997,6 +1055,34 @@ export const T = {
         `${vials} ASV సీసాలు · అత్యవసర వైద్యుడు${icu ? " · ఐసీయూ సిద్ధం" : ""}`,
     },
 
+    // ── Hospital dashboard view ──
+    dashboard: {
+      title: "ఆసుపత్రి డాష్‌బోర్డ్",
+      subtitle: "లైవ్ ట్రయేజ్ & వస్తున్న అత్యవసర రోగుల ట్రాకింగ్.",
+      patientId: "రోగి ID",
+      biteTime: "పాముకాటు సమయం",
+      eta: "ETA",
+      severity: "తీవ్రత",
+      snakeReport: "పాము గుర్తింపు నివేదిక",
+      location: "GPS స్థానం",
+      dose: "యాంటీవెనమ్ డోస్",
+      hospital: "కేటాయించిన ఆసుపత్రి",
+      status: "స్థితి",
+      noCases: "యాక్టివ్ వస్తున్న అత్యవసర కేసులు లేవు",
+      filters: "ఫిల్టర్‌లు",
+      all: "అన్నీ",
+      countdown: "చేరుకునే సమయం",
+      arrived: "చేరుకున్నారు",
+      late: "ఆలస్యం / చేరుకున్నారు",
+      statuses: {
+        preparing: "సిద్ధమవుతోంది",
+        enroute: "అంబులెన్స్ దారిలో ఉంది",
+        arrived: "రోగి చేరుకున్నారు",
+        started: "చికిత్స ప్రారంభమైంది"
+      },
+      vialsVal: (vials) => `${vials} సీసాలు`,
+    },
+
     risk: {
       title: "పాముకాటు అధిక ప్రమాద సూచిక",
       subtitle: "మీ ప్రాంతానికి సాధారణ సూచిక — మీ కోసం అంచనా కాదు.",
@@ -1032,6 +1118,7 @@ export const T = {
         "/routing": "యాంటీవెనమ్ కనుగొనండి",
         "/sos": "SOS హెచ్చరిక",
         "/hospital": "ఆసుపత్రి వీక్షణ",
+        "/dashboard": "ఆసుపత్రి డాష్‌బోర్డ్",
       },
     },
 
