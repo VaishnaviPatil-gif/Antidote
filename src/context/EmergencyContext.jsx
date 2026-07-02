@@ -54,6 +54,32 @@ const FRESH_LAUNCH = (() => {
   }
 })();
 
+/** Monotonic id source for contacts (unique within an app session). */
+let CONTACT_SEQ = 0;
+function makeContactId() {
+  CONTACT_SEQ += 1;
+  return `c_${Date.now().toString(36)}_${CONTACT_SEQ}`;
+}
+
+/**
+ * Normalise a state object's contacts: guarantee an `emergencyContacts` array
+ * (migrating a legacy single `emergencyContact`) and keep `emergencyContact`
+ * mirroring the primary (contacts[0]) so the SOS timeline/message never break.
+ */
+function withContacts(base) {
+  const raw = Array.isArray(base.emergencyContacts) && base.emergencyContacts.length
+    ? base.emergencyContacts
+    : base.emergencyContact
+    ? [base.emergencyContact]
+    : [];
+  const emergencyContacts = raw.map((c, i) => ({
+    id: c.id || `mig_${i}`,
+    name: c.name || "",
+    phone: c.phone || "",
+  }));
+  return { ...base, emergencyContacts, emergencyContact: emergencyContacts[0] || null };
+}
+
 /** Default shape — matches the §3 contract exactly. */
 const DEFAULT_STATE = {
   language: "te", // te | hi | en — default Telugu
@@ -63,7 +89,9 @@ const DEFAULT_STATE = {
   snake: null, // { species, confidence, venomous } | null
   severity: "mild", // mild | moderate | severe — routing READS this
   symptomLog: [], // Array<{ t, answers, level }>
-  emergencyContact: null, // { name, phone } | null
+  emergencyContacts: [], // Array<{ id, name, phone }> — family members to alert
+  emergencyContact: null, // { name, phone } | null — the PRIMARY (contacts[0]), kept
+  //                          in sync for the coordination timeline / message.
   recommendedHospital: null, // set by routing so SOS / hospital view can read it
   lastRoute: null, // deepest emergency screen visited — enables "resume" (§P1)
   // Optional patient identifiers for the clinician handover card. Not part of
@@ -83,14 +111,14 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_STATE };
     const parsed = JSON.parse(raw);
-    return {
+    return withContacts({
       ...DEFAULT_STATE,
       ...parsed,
       biteTime: parsed.biteTime ? new Date(parsed.biteTime) : null,
       symptomLog: Array.isArray(parsed.symptomLog)
         ? parsed.symptomLog.map((e) => ({ ...e, t: new Date(e.t) }))
         : [],
-    };
+    });
   } catch {
     return { ...DEFAULT_STATE };
   }
@@ -143,14 +171,14 @@ export function EmergencyProvider({ children }) {
           // Revive Dates the structured clone may not have carried through a
           // localStorage-shaped object (defensive — IndexedDB usually keeps them).
           const s = saved.state || {};
-          return {
+          return withContacts({
             ...DEFAULT_STATE,
             ...s,
             biteTime: s.biteTime ? new Date(s.biteTime) : null,
             symptomLog: Array.isArray(s.symptomLog)
               ? s.symptomLog.map((e) => ({ ...e, t: new Date(e.t) }))
               : [],
-          };
+          });
         });
       }
       setHydrated(true);
@@ -216,10 +244,55 @@ export function EmergencyProvider({ children }) {
     []
   );
 
-  const setEmergencyContact = useCallback(
-    (emergencyContact) => patch({ emergencyContact }),
-    [patch]
-  );
+  // ── Emergency contacts (family members to alert) ────────────────────────
+  /** Append a family member. First one added becomes the primary automatically. */
+  const addEmergencyContact = useCallback((c) => {
+    const name = (c?.name || "").trim();
+    const phone = (c?.phone || "").trim();
+    if (!name && !phone) return;
+    setState((s) => {
+      const contact = { id: makeContactId(), name, phone };
+      const emergencyContacts = [...(s.emergencyContacts || []), contact];
+      return { ...s, emergencyContacts, emergencyContact: emergencyContacts[0] };
+    });
+  }, []);
+
+  /** Remove a contact by id; the new first entry becomes the primary. */
+  const removeEmergencyContact = useCallback((id) => {
+    setState((s) => {
+      const emergencyContacts = (s.emergencyContacts || []).filter((c) => c.id !== id);
+      return { ...s, emergencyContacts, emergencyContact: emergencyContacts[0] || null };
+    });
+  }, []);
+
+  /** Promote a contact to primary (moves it to the front → drives the timeline). */
+  const setPrimaryContact = useCallback((id) => {
+    setState((s) => {
+      const list = s.emergencyContacts || [];
+      const idx = list.findIndex((c) => c.id === id);
+      if (idx <= 0) return s; // already primary or not found
+      const emergencyContacts = [list[idx], ...list.slice(0, idx), ...list.slice(idx + 1)];
+      return { ...s, emergencyContacts, emergencyContact: emergencyContacts[0] };
+    });
+  }, []);
+
+  /**
+   * Backward-compatible single-contact setter (kept for the demo seed and any
+   * legacy caller): replaces the PRIMARY contact, preserving the rest.
+   */
+  const setEmergencyContact = useCallback((c) => {
+    setState((s) => {
+      if (!c) return { ...s, emergencyContacts: [], emergencyContact: null };
+      const rest = (s.emergencyContacts || []).slice(1);
+      const contact = {
+        id: s.emergencyContacts?.[0]?.id || makeContactId(),
+        name: (c.name || "").trim(),
+        phone: (c.phone || "").trim(),
+      };
+      const emergencyContacts = [contact, ...rest];
+      return { ...s, emergencyContacts, emergencyContact: contact };
+    });
+  }, []);
 
   /** Routing writes the chosen hospital so SOS + the hospital view can read it. */
   const setRecommendedHospital = useCallback(
@@ -303,6 +376,10 @@ export function EmergencyProvider({ children }) {
         },
       ],
       emergencyContact: { name: "Lakshmi (mother)", phone: "+91 90000 00000" },
+      emergencyContacts: [
+        { id: "demo-1", name: "Lakshmi (mother)", phone: "+91 90000 00000" },
+        { id: "demo-2", name: "Ravi (brother)", phone: "+91 90000 11111" },
+      ],
       recommendedHospital: {
         name: "District Hospital Vikarabad",
         tierKey: "dh",
@@ -337,6 +414,9 @@ export function EmergencyProvider({ children }) {
       setSeverity,
       appendSymptom,
       setEmergencyContact,
+      addEmergencyContact,
+      removeEmergencyContact,
+      setPrimaryContact,
       setRecommendedHospital,
       setPatientInfo,
       resetEmergency,
@@ -356,6 +436,9 @@ export function EmergencyProvider({ children }) {
       setSeverity,
       appendSymptom,
       setEmergencyContact,
+      addEmergencyContact,
+      removeEmergencyContact,
+      setPrimaryContact,
       setRecommendedHospital,
       setPatientInfo,
       resetEmergency,
