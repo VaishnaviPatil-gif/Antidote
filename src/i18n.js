@@ -65,6 +65,8 @@ export const T = {
       useLoc: "Use this location",
       learn: "Learn & prevent",
       learnHint: "Snakebite risk near you, safety tips",
+      staff: "Hospital staff",
+      staffHint: "Update antivenom & bed availability",
       start: "Start emergency",
     },
 
@@ -205,6 +207,12 @@ export const T = {
       relayHospital: "Forwarded to", noHospitalYet: "No hospital chosen yet — open routing first.",
       edit: "Edit", regenerate: "Regenerate", recipient: "To",
       autoSend: "Will auto-send when back online",
+      callNow: "Call", smsBtn: "Send SMS alert", openingSms: "Opening messages…",
+      noPhone: "Add a phone number to call or text",
+      primary: "Primary", makePrimary: "Set primary", remove: "Remove",
+      addAnother: "Add another contact",
+      shareLoc: "Share live location", locShared: "Location link shared",
+      contactsHint: "Everyone here gets your alert. Tap a name to make them primary.",
     },
 
     // ── Emergency coordination timeline (§SOS) ──
@@ -431,6 +439,8 @@ export const T = {
       useLoc: "यह स्थान उपयोग करें",
       learn: "जानें व बचाव",
       learnHint: "आपके पास सर्पदंश जोखिम, सुरक्षा सुझाव",
+      staff: "अस्पताल कर्मचारी",
+      staffHint: "एंटीवेनम व बेड उपलब्धता अपडेट करें",
       start: "आपातकाल शुरू करें",
     },
 
@@ -567,6 +577,12 @@ export const T = {
       relayHospital: "इन्हें भेजा गया", noHospitalYet: "अभी कोई अस्पताल नहीं चुना — पहले रूटिंग खोलें।",
       edit: "संपादित करें", regenerate: "फिर बनाएँ", recipient: "को",
       autoSend: "ऑनलाइन होते ही अपने-आप भेजेगा",
+      callNow: "कॉल करें", smsBtn: "SMS अलर्ट भेजें", openingSms: "मैसेज खोल रहे…",
+      noPhone: "कॉल या मैसेज के लिए फ़ोन नंबर जोड़ें",
+      primary: "मुख्य", makePrimary: "मुख्य बनाएँ", remove: "हटाएँ",
+      addAnother: "एक और संपर्क जोड़ें",
+      shareLoc: "लाइव लोकेशन भेजें", locShared: "लोकेशन लिंक भेजा गया",
+      contactsHint: "यहाँ सभी को आपका अलर्ट मिलेगा। मुख्य बनाने हेतु नाम पर टैप करें।",
     },
 
     // ── Emergency coordination timeline (§SOS) ──
@@ -790,6 +806,8 @@ export const T = {
       useLoc: "ఈ ప్రాంతాన్ని వాడండి",
       learn: "తెలుసుకోండి & నివారణ",
       learnHint: "మీ చుట్టూ పాముకాటు ప్రమాదం, భద్రతా చిట్కాలు",
+      staff: "ఆసుపత్రి సిబ్బంది",
+      staffHint: "యాంటీవెనమ్ & బెడ్ లభ్యతను నవీకరించండి",
       start: "అత్యవసరం ప్రారంభించండి",
     },
 
@@ -926,6 +944,12 @@ export const T = {
       relayHospital: "వీరికి పంపబడింది", noHospitalYet: "ఇంకా ఆసుపత్రి ఎంచుకోలేదు — ముందు రూటింగ్ తెరవండి.",
       edit: "మార్చు", regenerate: "మళ్లీ రూపొందించు", recipient: "కు",
       autoSend: "ఆన్‌లైన్ అయ్యాక ఆటోమేటిక్‌గా పంపుతుంది",
+      callNow: "కాల్ చేయి", smsBtn: "SMS హెచ్చరిక పంపు", openingSms: "సందేశాలు తెరుస్తోంది…",
+      noPhone: "కాల్ లేదా సందేశం కోసం ఫోన్ నంబర్ జోడించండి",
+      primary: "ముఖ్య", makePrimary: "ముఖ్యంగా చేయి", remove: "తొలగించు",
+      addAnother: "మరో సంప్రదింపు జోడించండి",
+      shareLoc: "లైవ్ లొకేషన్ పంపండి", locShared: "లొకేషన్ లింక్ పంపబడింది",
+      contactsHint: "ఇక్కడ అందరికీ మీ హెచ్చరిక వెళ్తుంది. ముఖ్యంగా చేయడానికి పేరుపై నొక్కండి.",
     },
 
     // ── Emergency coordination timeline (§SOS) ──
