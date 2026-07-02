@@ -491,6 +491,10 @@ export const T = {
         monitor: "Monitor vitals continuously; reassess on arrival",
       },
       langName: { te: "Telugu", hi: "Hindi", en: "English" },
+      qrTitle: "Scan QR Handover",
+      qrDesc: "Let the receiving doctor scan this QR code to instantly view this clinical handover report on their device.",
+      qrToggleShow: "Generate QR Handover",
+      qrToggleHide: "Hide QR Handover",
     },
   },
 
@@ -957,6 +961,10 @@ export const T = {
         monitor: "लगातार जीवन-संकेत निगरानी; पहुँचने पर पुनः आकलन",
       },
       langName: { te: "तेलुगु", hi: "हिंदी", en: "अंग्रेज़ी" },
+      qrTitle: "क्यूआर हैंडओवर स्कैन करें",
+      qrDesc: "प्राप्तकर्ता डॉक्टर को अपने डिवाइस पर इस नैदानिक हैंडओवर रिपोर्ट को तुरंत देखने के लिए इस क्यूआर कोड को स्कैन करने दें।",
+      qrToggleShow: "क्यूआर हैंडओवर जेनरेट करें",
+      qrToggleHide: "क्यूआर हैंडओवर छिपाएं",
     },
   },
 
@@ -1423,6 +1431,10 @@ export const T = {
         monitor: "నిరంతరం ప్రాణ సంకేతాల పర్యవేక్షణ; చేరాక మళ్లీ అంచనా",
       },
       langName: { te: "తెలుగు", hi: "హిందీ", en: "ఇంగ్లీష్" },
+      qrTitle: "క్యూఆర్ హ్యాండోవర్ స్కాన్",
+      qrDesc: "స్వీకరించే వైద్యుడు ఈ క్లినికల్ హ్యాండోవర్ నివేదికను వారి పరికరంలో తక్షణమే చూడటానికి ఈ క్యూఆర్ కోడ్‌ను స్కాన్ చేయనివ్వండి.",
+      qrToggleShow: "క్యూఆర్ హ్యాండోవర్ రూపొందించు",
+      qrToggleHide: "క్యూఆర్ హ్యాండోవర్ దాచు",
     },
   },
 };
