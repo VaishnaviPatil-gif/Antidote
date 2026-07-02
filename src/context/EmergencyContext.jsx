@@ -270,6 +270,52 @@ export function EmergencyProvider({ children }) {
     setState((s) => ({ ...DEFAULT_STATE, language: s.language }));
   }, []);
 
+  /**
+   * Load a complete, realistic demo scenario in ONE update — a severe Russell's
+   * viper bite near Marpally ~18 min ago, with symptoms, an emergency contact
+   * and a recommended hospital already chosen. Lets an on-stage demo jump
+   * straight into routing / SOS timeline / handover without waiting on live GPS
+   * or permissions. Keeps the chosen language; this is a deliberate seed, so it
+   * clears the resume offer rather than triggering it.
+   */
+  const seedDemo = useCallback(() => {
+    const now = Date.now();
+    setFreshLaunch(false);
+    setState((s) => ({
+      ...DEFAULT_STATE,
+      language: s.language,
+      biteTime: new Date(now - 18 * 60000),
+      victimLocation: { lat: 17.27, lng: 77.77 },
+      victimLabel: "Marpally, Vikarabad",
+      snake: { species: "Russell's Viper", confidence: 0.93, venomous: true },
+      severity: "severe",
+      symptomLog: [
+        {
+          t: new Date(now - 6 * 60000),
+          answers: {
+            swelling: "spreading",
+            breathing: "yes",
+            vision: "yes",
+            bleeding: "no",
+            drowsy: "no",
+          },
+          level: "severe",
+        },
+      ],
+      emergencyContact: { name: "Lakshmi (mother)", phone: "+91 90000 00000" },
+      recommendedHospital: {
+        name: "District Hospital Vikarabad",
+        tierKey: "dh",
+        eta: 27,
+        km: 16,
+        vials: 30,
+        icu: true,
+      },
+      patientAge: "34",
+      patientGender: "female",
+    }));
+  }, []);
+
   // A resumable emergency exists when this is a fresh launch AND there is a
   // bite on record. The banner is the only consumer; derive it once here.
   const resumeAvailable = freshLaunch && !!state.biteTime;
@@ -294,6 +340,7 @@ export function EmergencyProvider({ children }) {
       setRecommendedHospital,
       setPatientInfo,
       resetEmergency,
+      seedDemo,
     }),
     [
       state,
@@ -312,6 +359,7 @@ export function EmergencyProvider({ children }) {
       setRecommendedHospital,
       setPatientInfo,
       resetEmergency,
+      seedDemo,
     ]
   );
 

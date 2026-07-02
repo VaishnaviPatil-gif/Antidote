@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Siren, Crosshair, CheckCircle2, Loader2, MapPin,
-  ChevronRight, ShieldQuestion, Pencil, Navigation2,
+  ChevronRight, ShieldQuestion, Pencil, Navigation2, Play,
 } from "lucide-react";
 import { C } from "../theme.js";
 import { tFor } from "../i18n.js";
@@ -43,9 +43,15 @@ const DEMO_MODE = true;
 
 export default function Home() {
   const navigate = useNavigate();
-  const { startEmergency, setVictimLocation } = useEmergency();
+  const { startEmergency, setVictimLocation, seedDemo } = useEmergency();
   const { language } = useEmergency();
   const t = tFor(language);
+
+  /** One-tap demo: load a full realistic scenario and jump into routing. */
+  const runDemo = useCallback(() => {
+    seedDemo();
+    navigate("/routing");
+  }, [seedDemo, navigate]);
 
   // location state machine: "locating" | "ready" | "denied"
   const [status, setStatus] = useState("locating");
@@ -283,6 +289,18 @@ export default function Home() {
         </div>
         <ChevronRight size={18} style={{ color: C.muted }} className="shrink-0" />
       </button>
+
+      {/* ── Demo shortcut (demo builds only) — seed a full scenario & jump ── */}
+      {DEMO_MODE && (
+        <button
+          onClick={runDemo}
+          className="rounded-xl border border-dashed flex items-center justify-center gap-1.5 py-2.5 active:scale-[.99] transition-transform"
+          style={{ borderColor: "#C5DBD9", color: C.muted, background: "transparent" }}
+        >
+          <Play size={13} style={{ color: C.tealLight }} />
+          <span className="text-xs font-semibold">Load demo scenario</span>
+        </button>
+      )}
 
       {/* Subtle footnote tying Home to the routing scenario without alarm. */}
       <div className="flex items-center justify-center gap-1.5 pt-1 text-xs" style={{ color: C.muted }}>
