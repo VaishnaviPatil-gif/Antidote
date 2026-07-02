@@ -26,7 +26,16 @@ from ..config import settings
 logger = logging.getLogger("antidote.gemini")
 
 # The safe default, identical to the frontend's contract.
-SAFE_DEFAULT = {"species": "Unidentified", "confidence": 0.0, "venomous": True}
+SAFE_DEFAULT = {
+    "species": "Unidentified",
+    "common_name": "Unidentified",
+    "scientific_name": None,
+    "reasoning": ["Insufficient visual evidence."],
+    "validation_status": "Fallback Active",
+    "validation_reason": "Process failed",
+    "confidence": 0.0,
+    "venomous": True,
+}
 
 # Species labels (any casing) that mean "no identification".
 _UNIDENTIFIED = {"", "unidentified", "unknown", "none"}
@@ -345,7 +354,16 @@ def identify(image_b64: str, mime: str = "image/jpeg") -> dict:
         verdict = _validate_identification(gm, species, confidence)
 
         if verdict.accepted:
-            result = {"species": species, "confidence": confidence, "venomous": gm.venomous}
+            result = {
+                "species": species,
+                "common_name": (gm.common_name or gm.species or "Unidentified").strip(),
+                "scientific_name": (gm.scientific_name or "").strip() or None,
+                "reasoning": gm.reasoning,
+                "validation_status": "Validated",
+                "validation_reason": None,
+                "confidence": confidence,
+                "venomous": gm.venomous,
+            }
             logger.info("identify: validation -> ACCEPTED (%s, %.2f)", species, confidence)
         else:
             # Fail closed → Unidentified, assume venomous. PRESERVE Gemini's
@@ -353,7 +371,16 @@ def identify(image_b64: str, mime: str = "image/jpeg") -> dict:
             # below safe identification threshold"; only fall back to 0.0 when the
             # confidence itself was missing / out of range (nothing to preserve).
             display_conf = confidence if confidence is not None else 0.0
-            result = {"species": "Unidentified", "confidence": display_conf, "venomous": True}
+            result = {
+                "species": "Unidentified",
+                "common_name": "Unidentified",
+                "scientific_name": None,
+                "reasoning": [verdict.reason] if verdict.reason else ["Insufficient visual evidence."],
+                "validation_status": "Fallback Active",
+                "validation_reason": verdict.reason,
+                "confidence": display_conf,
+                "venomous": True,
+            }
             logger.info("identify: validation -> REJECTED (reason: %s)", verdict.reason)
 
         logger.info("identify: final response -> %s", result)  # STEP 6

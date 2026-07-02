@@ -17,7 +17,16 @@
 const API_BASE = (import.meta.env?.VITE_API_BASE ?? "").replace(/\/+$/, "");
 
 /** Safe default identification, mirroring the backend contract exactly. */
-const SAFE_DEFAULT = { species: "Unidentified", confidence: 0, venomous: true };
+const SAFE_DEFAULT = {
+  species: "Unidentified",
+  common_name: "Unidentified",
+  scientific_name: null,
+  reasoning: ["Insufficient visual evidence."],
+  validation_status: "Fallback Active",
+  validation_reason: "Process failed",
+  confidence: 0,
+  venomous: true
+};
 
 /**
  * POST /api/identify — analyse a snake photo.
@@ -26,7 +35,7 @@ const SAFE_DEFAULT = { species: "Unidentified", confidence: 0, venomous: true };
  * the UI can show a quiet note without changing the safety behaviour.
  *
  * @param {string} dataUrl - captured image as a data URL
- * @returns {Promise<{species:string,confidence:number,venomous:boolean,_failed:boolean}>}
+ * @returns {Promise<{species:string,common_name:string,scientific_name:string|null,reasoning:string[],validation_status:string,validation_reason:string|null,confidence:number,venomous:boolean,_failed:boolean}>}
  */
 export async function identifySnake(dataUrl) {
   try {
@@ -41,11 +50,18 @@ export async function identifySnake(dataUrl) {
     // Pipeline diagnostics (dev only): the exact JSON received from the proxy,
     // which is what the Snake screen renders verbatim (species + confidence).
     if (import.meta.env?.DEV) console.debug("[identify] /api/identify response:", data);
-    const confidence = typeof data.confidence === "number" ? data.confidence : 0;
-    const species =
-      typeof data.species === "string" && data.species ? data.species : "Unidentified";
-    const venomous = data.venomous === false ? false : true; // default venomous
-    return { species, confidence, venomous, _failed: false };
+    
+    return {
+      species: typeof data.species === "string" && data.species ? data.species : "Unidentified",
+      common_name: typeof data.common_name === "string" && data.common_name ? data.common_name : "Unidentified",
+      scientific_name: typeof data.scientific_name === "string" && data.scientific_name ? data.scientific_name : null,
+      reasoning: Array.isArray(data.reasoning) ? data.reasoning : ["Insufficient visual evidence."],
+      validation_status: typeof data.validation_status === "string" && data.validation_status ? data.validation_status : "Fallback Active",
+      validation_reason: typeof data.validation_reason === "string" && data.validation_reason ? data.validation_reason : null,
+      confidence: typeof data.confidence === "number" ? data.confidence : 0,
+      venomous: data.venomous === false ? false : true,
+      _failed: false
+    };
   } catch {
     return { ...SAFE_DEFAULT, _failed: true };
   }
