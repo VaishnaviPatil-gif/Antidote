@@ -19,6 +19,7 @@ const Routing = lazy(() => import("./pages/Routing.jsx"));
 const Analytics = lazy(() => import("./pages/Analytics.jsx"));
 const Resources = lazy(() => import("./pages/Resources.jsx"));
 const HandoverViewer = lazy(() => import("./pages/HandoverViewer.jsx"));
+const Demo = lazy(() => import("./pages/Demo.jsx"));
 
 /**
  * Router + layout glue.
@@ -55,7 +56,7 @@ export default function App() {
   useEffect(() => {
     // Skip Home and the non-emergency screens (prevention + staff stock console)
     // so resume-after-restart always returns to the real last emergency step.
-    if (pathname !== "/" && pathname !== "/learn" && pathname !== "/stock" && pathname !== "/dashboard" && pathname !== "/analytics" && pathname !== "/resources" && pathname !== "/handover-viewer") {
+    if (pathname !== "/" && pathname !== "/learn" && pathname !== "/stock" && pathname !== "/dashboard" && pathname !== "/analytics" && pathname !== "/resources" && pathname !== "/handover-viewer" && pathname !== "/demo") {
       setLastRoute(pathname);
     }
   }, [pathname, setLastRoute]);
@@ -77,6 +78,7 @@ export default function App() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/resources" element={<Resources />} />
           <Route path="/handover-viewer" element={<HandoverViewer />} />
+          <Route path="/demo" element={<Demo />} />
         </Route>
 
         {/* Hero — full-bleed, self-contained, reads/writes EmergencyContext */}

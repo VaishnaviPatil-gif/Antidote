@@ -68,6 +68,20 @@ export default function TopBar() {
             </button>
           )}
 
+          <button
+            onClick={() => navigate("/demo")}
+            aria-label="Demo Mode"
+            className="flex items-center justify-center rounded-full transition-colors active:scale-95"
+            style={{
+              width: 34,
+              height: 34,
+              background: "rgba(255,255,255,.12)",
+              color: "#DCEFEE",
+            }}
+          >
+            🧪
+          </button>
+
           <div
             className="flex items-center gap-1 rounded-full p-0.5"
             style={{ background: "rgba(255,255,255,.12)" }}
