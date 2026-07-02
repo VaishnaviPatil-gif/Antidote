@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
 
     # Gemini model used for both vision and text.
-    gemini_model: str = "gemini-1.5-flash"
+    gemini_model: str = "gemini-2.5-flash"
 
     # CORS origins (comma-separated) — the Vite dev server by default.
     allowed_origins: str = "http://localhost:5173"
@@ -30,8 +30,10 @@ class Settings(BaseSettings):
     # Logging level.
     log_level: str = "INFO"
 
-    # Confidence floor for snake identification.
-    low_confidence: float = 0.6
+    # Confidence floor for snake identification (safety-first policy). Below this
+    # the proxy refuses to name a species and assumes venomous — in a medical
+    # emergency, no identification is safer than a wrong one.
+    low_confidence: float = 0.9
 
     @property
     def origins(self) -> list[str]:
