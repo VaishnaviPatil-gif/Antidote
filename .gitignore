@@ -8,6 +8,9 @@ backend/.venv/
 __pycache__/
 *.pyc
 
+# Runtime data (live hospital stock store — regenerated from seed on first run)
+backend/app/data/hospitals_store.json
+
 # Secrets & env (never commit real keys)
 .env
 backend/.env
