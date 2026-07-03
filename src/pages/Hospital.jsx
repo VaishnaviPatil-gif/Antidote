@@ -46,7 +46,7 @@ export default function Hospital() {
       {/* ── Title + read-only framing ──────────────────────────── */}
       <div className="flex items-start gap-2">
         <HospitalIcon size={20} style={{ color: C.teal }} className="shrink-0 mt-0.5" />
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-lg font-extrabold leading-tight" style={{ color: C.dark }}>
             {t.hospital.title}
           </h1>
@@ -55,6 +55,19 @@ export default function Hospital() {
           </p>
         </div>
       </div>
+
+      {/* ── Dashboard link banner ── */}
+      <button
+        onClick={() => navigate("/dashboard")}
+        className="w-full rounded-xl border flex items-center justify-between px-3 py-2.5 text-xs font-bold active:scale-[.99] transition-transform"
+        style={{ borderColor: "#C5DBD9", color: C.teal, background: C.tealPale }}
+      >
+        <span className="flex items-center gap-1.5">
+          <Activity size={14} style={{ color: C.teal }} />
+          {t.dashboard.title}
+        </span>
+        <ChevronRight size={14} style={{ color: C.teal }} />
+      </button>
 
       {/* ── Incoming alert card ────────────────────────────────── */}
       <div

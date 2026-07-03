@@ -28,6 +28,11 @@ class IdentifyResponse(BaseModel):
     reasoning: list[str] | None = Field(default_factory=list, description="Reasoning or diagnostic features.")
     validation_status: str | None = Field(default=None, description="Validation status of the analysis.")
     validation_reason: str | None = Field(default=None, description="Reason for validation state.")
+    venom_type: str | None = Field(default=None, description="Type of venom (e.g. Neurotoxic, Hemotoxic, None).")
+    danger_level: str | None = Field(default=None, description="Dangerous level classification.")
+    similar_snakes: list[str] | None = Field(default_factory=list, description="Similar looking snakes.")
+    typical_habitat: str | None = Field(default=None, description="Typical habitat of the species.")
+    first_aid_steps: list[str] | None = Field(default_factory=list, description="Emergency first aid steps.")
 
 
 # ── /api/summarize ─────────────────────────────────────────────────────────
@@ -91,3 +96,19 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     gemini: bool = Field(..., description="True when a Gemini key is configured.")
     version: str
+
+
+# ── /api/severity ───────────────────────────────────────────────────────────
+class SeverityRequest(BaseModel):
+    symptoms: dict
+    snake: dict | None = None
+    mins_since_bite: int
+    swelling_progression: str = "local"
+
+
+class SeverityResponse(BaseModel):
+    severity: str = Field(..., description="Mild | Moderate | Severe | Critical")
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    reasoning: list[str] = Field(default_factory=list)
+    disclaimer: str
+    source: str = Field(..., description='"gemini" or "fallback"')

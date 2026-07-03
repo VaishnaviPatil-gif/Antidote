@@ -25,7 +25,18 @@ const SAFE_DEFAULT = {
   validation_status: "Fallback Active",
   validation_reason: "Process failed",
   confidence: 0,
-  venomous: true
+  venomous: true,
+  venom_type: "Unknown (Assume Neurotoxic & Hemotoxic)",
+  danger_level: "Critical (Safety Fallback Active)",
+  similar_snakes: [],
+  typical_habitat: "Rural and agricultural regions of South Asia",
+  first_aid_steps: [
+    "Keep calm and minimize movement.",
+    "Immobilize the bitten limb at or below heart level.",
+    "Remove tight jewelry, watches, or clothing.",
+    "Reach a medical facility with antivenom immediately.",
+    "DO NOT cut, suck, or apply tourniquets."
+  ]
 };
 
 /**
@@ -90,6 +101,28 @@ export async function summarizeSymptoms(symptomLog, biteTime, language) {
       return { text: data.summary, source: data.source || "gemini" };
     }
     return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /api/severity — AI Severity Engine.
+ */
+export async function evaluateSeverity(symptoms, snake, minsSinceBite, swellingProgression) {
+  try {
+    const res = await fetch(`${API_BASE}/api/severity`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        symptoms,
+        snake,
+        mins_since_bite: minsSinceBite,
+        swelling_progression: swellingProgression
+      }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
     return null;
   }

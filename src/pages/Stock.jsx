@@ -107,28 +107,61 @@ export default function Stock() {
     async (f) => {
       setSavingId(f.id);
       setErrorId(null);
-      try {
-        const updated = await updateStock(f.id, {
-          vials: Math.max(0, Number(draft.vials) || 0),
-          beds: Math.max(0, Number(draft.beds) || 0),
-        });
-        // Reflect the server truth (fresh vials/beds + reset "updated ago").
+
+      const vials = Math.max(0, Number(draft.vials) || 0);
+      const beds = Math.max(0, Number(draft.beds) || 0);
+
+      if (online) {
+        try {
+          const updated = await updateStock(f.id, { vials, beds });
+          // Reflect the server truth (fresh vials/beds + reset "updated ago").
+          setFacilities((prev) =>
+            prev.map((x) =>
+              x.id === f.id
+                ? { ...x, vials: updated.vials, beds: updated.beds, updatedMin: 0, _isOfflineQueued: false }
+                : x
+            )
+          );
+          setEditingId(null);
+          setSavedId(f.id);
+        } catch {
+          setErrorId(f.id);
+        } finally {
+          setSavingId(null);
+        }
+      } else {
+        // Offline flow: update local state immediately and queue sync
         setFacilities((prev) =>
           prev.map((x) =>
             x.id === f.id
-              ? { ...x, vials: updated.vials, beds: updated.beds, updatedMin: 0 }
+              ? { ...x, vials, beds, updatedMin: 0, _isOfflineQueued: true }
               : x
           )
         );
+
+        // Also update local cached registry in IndexedDB so other screens read the new offline value!
+        import("../lib/db.js").then(({ idbSet }) => {
+          const cacheKey = "antidote:hospitals";
+          const updatedList = facilities.map((x) =>
+            x.id === f.id ? { ...x, vials, beds, updatedMin: 0 } : x
+          );
+          idbSet(cacheKey, { facilities: updatedList, updated_at: new Date().toISOString() });
+        });
+
+        import("../lib/sync.js").then(({ enqueueAction }) => {
+          enqueueAction("UPDATE_STOCK", {
+            hospitalId: f.id,
+            vials,
+            beds
+          });
+        });
+
         setEditingId(null);
         setSavedId(f.id);
-      } catch {
-        setErrorId(f.id);
-      } finally {
         setSavingId(null);
       }
     },
-    [draft]
+    [draft, online, facilities]
   );
 
   const sorted = useMemo(
@@ -232,14 +265,13 @@ export default function Stock() {
                           </span>
                         )}
                         <span className="text-[10px]" style={{ color: C.muted }}>
-                          {t.updated} {fmtAgo(f.updatedMin, t)}
+                          {t.updated} {fmtAgo(f.updatedMin, t)} {f._isOfflineQueued && <span style={{ color: C.orange, fontWeight: "bold" }}> (Pending Sync)</span>}
                         </span>
                       </div>
                     </div>
                     {!isEditing && (
                       <button
                         onClick={() => startEdit(f)}
-                        disabled={!online}
                         className="shrink-0 flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold disabled:opacity-40"
                         style={{ background: C.tealPale, color: C.teal }}
                       >

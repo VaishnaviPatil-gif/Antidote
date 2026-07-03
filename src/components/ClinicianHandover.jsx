@@ -66,6 +66,39 @@ export default function ClinicianHandover({ hospital, status }) {
     setEditing(false);
   }, [pId, pAge, pGender, setPatientInfo]);
 
+  // ── QR Code Handover Generation ──────────────────────────────────────────
+  const [showQr, setShowQr] = useState(false);
+  const [qrUrl, setQrUrl] = useState("");
+
+  useEffect(() => {
+    const symptomsList = Array.isArray(model.symptoms) ? model.symptoms : [];
+    const handoverData = {
+      patientId: patientId || h.notRecorded,
+      patientAge: patientAge || h.notRecorded,
+      patientGender: patientGender ? h.genderOpts[patientGender] : h.notRecorded,
+      severity: model.severityLabel,
+      timeSince: model.timeSince,
+      snake: model.snakeName,
+      hospital: model.hospitalName,
+      gps: model.gps,
+      symptoms: symptomsList,
+      treatment: model.treatment,
+      firstAid: t.firstAid.doItems,
+      biteTime: model.biteTime
+    };
+
+    const payload = encodeURIComponent(JSON.stringify(handoverData));
+    const viewUrl = `${window.location.origin}/handover-viewer?data=${payload}`;
+
+    import("qrcode").then((QRCodeLib) => {
+      QRCodeLib.default.toDataURL(viewUrl, { width: 220, margin: 1 }, (err, url) => {
+        if (!err) setQrUrl(url);
+      });
+    }).catch((err) => {
+      console.error("Failed to load qrcode library", err);
+    });
+  }, [patientId, patientAge, patientGender, model, t, h, language]);
+
   const tone = model.severityTone;
 
   return (
@@ -271,6 +304,43 @@ export default function ClinicianHandover({ hospital, status }) {
             <DetailRow label={h.patientId} value={model.patientId} />
             <DetailRow label={h.age} value={model.age} />
             <DetailRow label={h.gender} value={model.gender} last />
+          </div>
+        )}
+      </div>
+
+      {/* ── QR Handover Generation Panel ─────────────────────────────────── */}
+      <div className="px-4 pt-3 border-t mt-3" style={{ borderColor: "#EEF4F3" }}>
+        <button
+          onClick={() => setShowQr(prev => !prev)}
+          className="w-full rounded-xl border flex items-center justify-between px-3 py-2 text-xs font-bold active:scale-95 transition-transform"
+          style={{ borderColor: C.teal, color: C.teal, background: C.tealPale }}
+        >
+          <span className="flex items-center gap-1.5">
+            <RadioTower size={14} className={showQr ? "animate-pulse" : ""} style={{ color: C.teal }} />
+            {showQr ? h.qrToggleHide : h.qrToggleShow}
+          </span>
+          <ChevronDown size={14} style={{ color: C.teal, transform: showQr ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+        </button>
+
+        {showQr && (
+          <div className="mt-3 flex flex-col items-center gap-2 p-3.5 rounded-xl border bg-white animate-fade-in" style={{ borderColor: "#E1EAE9" }}>
+            <div className="text-xs font-extrabold uppercase tracking-wide text-center" style={{ color: C.dark }}>
+              {h.qrTitle}
+            </div>
+            
+            {qrUrl ? (
+              <div className="p-2 border rounded-xl bg-white shadow-inner mt-1">
+                <img src={qrUrl} alt="Handover QR Code" className="w-[180px] h-[180px]" />
+              </div>
+            ) : (
+              <div className="w-[180px] h-[180px] flex items-center justify-center text-xs font-bold" style={{ color: C.muted }}>
+                Generating...
+              </div>
+            )}
+            
+            <p className="text-[10px] text-center leading-normal mt-1 max-w-[200px]" style={{ color: C.muted }}>
+              {h.qrDesc}
+            </p>
           </div>
         )}
       </div>

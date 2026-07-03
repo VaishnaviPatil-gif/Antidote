@@ -12,9 +12,14 @@ const Tracker = lazy(() => import("./pages/Tracker.jsx"));
 const Snake = lazy(() => import("./pages/Snake.jsx"));
 const SOS = lazy(() => import("./pages/SOS.jsx"));
 const Hospital = lazy(() => import("./pages/Hospital.jsx"));
+const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 const Learn = lazy(() => import("./pages/Learn.jsx"));
 const Stock = lazy(() => import("./pages/Stock.jsx"));
 const Routing = lazy(() => import("./pages/Routing.jsx"));
+const Analytics = lazy(() => import("./pages/Analytics.jsx"));
+const Resources = lazy(() => import("./pages/Resources.jsx"));
+const HandoverViewer = lazy(() => import("./pages/HandoverViewer.jsx"));
+const Demo = lazy(() => import("./pages/Demo.jsx"));
 
 /**
  * Router + layout glue.
@@ -51,7 +56,7 @@ export default function App() {
   useEffect(() => {
     // Skip Home and the non-emergency screens (prevention + staff stock console)
     // so resume-after-restart always returns to the real last emergency step.
-    if (pathname !== "/" && pathname !== "/learn" && pathname !== "/stock") {
+    if (pathname !== "/" && pathname !== "/learn" && pathname !== "/stock" && pathname !== "/dashboard" && pathname !== "/analytics" && pathname !== "/resources" && pathname !== "/handover-viewer" && pathname !== "/demo") {
       setLastRoute(pathname);
     }
   }, [pathname, setLastRoute]);
@@ -67,8 +72,13 @@ export default function App() {
           <Route path="/tracker" element={<Tracker />} />
           <Route path="/sos" element={<SOS />} />
           <Route path="/hospital" element={<Hospital />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/learn" element={<Learn />} />
           <Route path="/stock" element={<Stock />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/resources" element={<Resources />} />
+          <Route path="/handover-viewer" element={<HandoverViewer />} />
+          <Route path="/demo" element={<Demo />} />
         </Route>
 
         {/* Hero — full-bleed, self-contained, reads/writes EmergencyContext */}

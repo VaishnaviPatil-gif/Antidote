@@ -140,3 +140,73 @@ export async function updateStock(id, { vials, beds }) {
   if (!res.ok) throw new Error(`stock update failed (${res.status})`);
   return res.json();
 }
+
+/** Mock cases database shared between Dashboard and Routing */
+export const MOCK_INCOMING_CASES = [
+  {
+    id: "P-882-901",
+    severity: "severe",
+    species: "Indian Cobra",
+    confidence: 0.95,
+    gps: "17.305, 77.730",
+    eta: 30,
+    assignedHospitalId: "dh-vikarabad",
+    assignedHospitalName: "District Hospital Vikarabad",
+    status: "enroute"
+  },
+  {
+    id: "P-112-402",
+    severity: "moderate",
+    species: "Russell's Viper",
+    confidence: 0.91,
+    gps: "17.130, 77.870",
+    eta: 20,
+    assignedHospitalId: "ah-vikarabad",
+    assignedHospitalName: "Area Hospital Vikarabad",
+    status: "preparing"
+  },
+  {
+    id: "P-491-008",
+    severity: "mild",
+    species: "Common Sand Boa",
+    confidence: 0.78,
+    gps: "17.245, 77.575",
+    eta: 15,
+    assignedHospitalId: "chc-tandur",
+    assignedHospitalName: "CHC Tandur",
+    status: "arrived"
+  }
+];
+
+export function getRequiredVials(severity) {
+  return severity === "severe" ? 10 : severity === "moderate" ? 6 : 4;
+}
+
+export function getPredictedRemainingVials(facility, liveCase) {
+  const stock = facility.vials;
+  let incomingVials = 0;
+
+  MOCK_INCOMING_CASES.forEach(c => {
+    if (c.assignedHospitalId === facility.id) {
+      const status = localStorage.getItem(`dashboard.mock.status.${c.id}`) || c.status;
+      if (status === "preparing" || status === "enroute") {
+        incomingVials += getRequiredVials(c.severity);
+      }
+    }
+  });
+
+  if (liveCase && liveCase.assignedHospitalId === facility.id) {
+    const status = localStorage.getItem("dashboard.live.status") || "preparing";
+    if (status === "preparing" || status === "enroute") {
+      incomingVials += getRequiredVials(liveCase.severity);
+    }
+  }
+
+  return stock - incomingVials;
+}
+
+export function getCapacityRating(remaining, requiredVials) {
+  if (remaining >= requiredVials) return "green";
+  if (remaining > 0) return "yellow";
+  return "red";
+}

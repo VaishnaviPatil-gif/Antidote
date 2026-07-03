@@ -7,7 +7,7 @@ import {
 import { useEmergency } from "../context/EmergencyContext.jsx";
 import NavigationOverlay from "../components/NavigationOverlay.jsx";
 import ClinicianHandover from "../components/ClinicianHandover.jsx";
-import { SEED_FACILITIES, fetchHospitals } from "../lib/hospitals.js";
+import { SEED_FACILITIES, fetchHospitals, getPredictedRemainingVials, getCapacityRating } from "../lib/hospitals.js";
 
 // The interactive Leaflet map is lazy-loaded so the (heavy) mapping bundle only
 // downloads when the Routing screen is actually shown — keeping the rest of the
@@ -194,7 +194,15 @@ export default function AntidotePlusRouting() {
     ? Math.max(0, Math.floor((Date.now() - new Date(biteTime).getTime()) / 60000))
     : 18;
 
-  const requiredVials = severity === "severe" ? 10 : severity === "moderate" ? 6 : 4;
+  const requiredVials = severity === "critical" ? 15 : severity === "severe" ? 10 : severity === "moderate" ? 6 : 4;
+
+  const liveCaseInfo = useMemo(() => {
+    if (!biteTime || !recommendedHospital) return null;
+    return {
+      assignedHospitalId: recommendedHospital.id,
+      severity
+    };
+  }, [biteTime, recommendedHospital, severity]);
 
   // Compute distances + classify every facility
   const ranked = useMemo(() => {
@@ -202,9 +210,14 @@ export default function AntidotePlusRouting() {
       const km = haversineKm(victim, f);
       const tier = stockTier(f.vials, requiredVials);
       const stale = f.updatedMin > STALE_MIN && f.vials > 0;
-      return { ...f, km, eta: etaMin(km), tier, stale };
+      
+      // Capacity Prediction
+      const remaining = getPredictedRemainingVials(f, liveCaseInfo);
+      const rating = getCapacityRating(remaining, requiredVials);
+
+      return { ...f, km, eta: etaMin(km), tier, stale, remaining, rating };
     }).sort((a, b) => a.km - b.km);
-  }, [facilities, requiredVials, victim]);
+  }, [facilities, requiredVials, victim, liveCaseInfo]);
 
   const nearest = ranked[0];
 
@@ -235,6 +248,13 @@ export default function AntidotePlusRouting() {
     [ranked, recommended]
   );
 
+  // Alternate hospital suggestion based on capacity prediction
+  const alternateHospital = useMemo(() => {
+    if (!recommended || (recommended.rating !== "red" && recommended.rating !== "yellow")) return null;
+    const candidates = ranked.filter(f => f.id !== recommended.id && f.rating === "green" && f.tier !== "out");
+    return candidates[0] || null;
+  }, [ranked, recommended]);
+
   // ── Hospital intelligence: filter the alternatives list ───────────────────
   // all | icu | govt | private | beds. Always sorted nearest-first (from ranked).
   const [facilityFilter, setFacilityFilter] = useState("all");
@@ -253,6 +273,7 @@ export default function AntidotePlusRouting() {
   useEffect(() => {
     if (recommended) {
       setRecommendedHospital({
+        id: recommended.id,
         name: recommended.name,
         tierKey: recommended.tierKey,
         eta: recommended.eta,
@@ -424,6 +445,24 @@ export default function AntidotePlusRouting() {
                 </div>
                 <div className="text-sm" style={{ color: C.muted }}>{tierName(recommended.tierKey)}</div>
 
+                {/* Capacity Triage Live Prediction */}
+                <div
+                  className="mt-2 text-xs font-bold rounded-lg px-2.5 py-1.5 flex items-center gap-1.5"
+                  style={{
+                    background: recommended.rating === "green" ? C.goodPale : recommended.rating === "yellow" ? C.amberPale : C.dangerPale,
+                    color: recommended.rating === "green" ? C.good : recommended.rating === "yellow" ? C.amber : C.danger,
+                  }}
+                >
+                  <Activity size={12} />
+                  <span>
+                    {recommended.rating === "green"
+                      ? `Capacity: Stable (${recommended.remaining} vials remaining)`
+                      : recommended.rating === "yellow"
+                      ? `Capacity: Warning (${recommended.remaining} vials remaining - near limit)`
+                      : `Capacity: Critical (Shortage predicted: ${recommended.remaining} vials)`}
+                  </span>
+                </div>
+
                 {/* Big stats row */}
                 <div className="grid grid-cols-3 gap-2 mt-3">
                   <Stat icon={<MapPin size={15} />} value={`${recommended.km.toFixed(0)} km`} label={t.away} color={C.teal} />
@@ -450,6 +489,60 @@ export default function AntidotePlusRouting() {
                     <RadioTower size={12} />{t.updated} {fmtUpdated(recommended.updatedMin)}
                   </span>
                 </div>
+
+                {/* Diversion Warning & Action */}
+                {alternateHospital && (
+                  <div
+                    className="mt-3 rounded-xl p-3 border flex flex-col gap-2"
+                    style={{
+                      background: recommended.rating === "red" ? C.dangerPale : C.amberPale,
+                      borderColor: recommended.rating === "red" ? "#F0CFC9" : "#FBF1E0"
+                    }}
+                  >
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle size={16} className="shrink-0 mt-0.5" style={{ color: recommended.rating === "red" ? C.danger : C.amber }} />
+                      <div className="text-xs leading-snug" style={{ color: C.dark }}>
+                        <span className="font-bold">
+                          {recommended.rating === "red" ? "Predicted Shortage Alert!" : "Near Capacity Warning!"}
+                        </span>{" "}
+                        This facility is predicted to run out of antivenom once incoming patients arrive. Diversion is advised.
+                      </div>
+                    </div>
+                    
+                    <div className="border-t pt-2 mt-1 flex flex-col gap-1.5" style={{ borderColor: recommended.rating === "red" ? "#F6D9D4" : "#F7EAD4" }}>
+                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+                        Recommended Diversion
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold truncate" style={{ color: C.dark }}>
+                            {alternateHospital.name}
+                          </div>
+                          <div className="text-[10px]" style={{ color: C.muted }}>
+                            {alternateHospital.km.toFixed(1)} km ({alternateHospital.eta} min by road) · {alternateHospital.vials} vials in stock
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setRecommendedHospital({
+                              id: alternateHospital.id,
+                              name: alternateHospital.name,
+                              tierKey: alternateHospital.tierKey,
+                              eta: alternateHospital.eta,
+                              km: alternateHospital.km,
+                              vials: alternateHospital.vials,
+                              icu: alternateHospital.icu,
+                            });
+                          }}
+                          className="rounded-lg px-2.5 py-1.5 text-xs font-bold text-white shrink-0 active:scale-95 transition-transform"
+                          style={{ background: C.teal }}
+                        >
+                          Divert Route
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Why further is worth it */}
                 {isTrap && minsFurther > 0 && (
@@ -601,11 +694,19 @@ export default function AntidotePlusRouting() {
                     {f.stale && <span style={{ color: C.amber }} className="font-semibold">⚠ {t.stale}</span>}
                   </div>
                 </div>
-                <div className="text-right shrink-0">
+                <div className="text-right shrink-0 flex flex-col items-end gap-1">
                   <div className="text-base font-extrabold tabular-nums" style={{ color: f.tier === "adequate" ? C.good : C.amber }}>
                     {f.vials}
                   </div>
-                  <div className="text-xs" style={{ color: C.muted }}>{t.vials}</div>
+                  <span
+                    className="text-[9px] font-bold rounded px-1.5 py-0.5 leading-none shrink-0"
+                    style={{
+                      background: f.rating === "green" ? C.goodPale : f.rating === "yellow" ? C.amberPale : C.dangerPale,
+                      color: f.rating === "green" ? C.good : f.rating === "yellow" ? C.amber : C.danger,
+                    }}
+                  >
+                    {f.rating === "green" ? "Stable" : f.rating === "yellow" ? "Warning" : "Critical"}
+                  </span>
                 </div>
               </div>
               ))

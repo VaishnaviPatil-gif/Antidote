@@ -35,6 +35,17 @@ SAFE_DEFAULT = {
     "validation_reason": "Process failed",
     "confidence": 0.0,
     "venomous": True,
+    "venom_type": "Unknown (Assume Neurotoxic & Hemotoxic)",
+    "danger_level": "Critical (Safety Fallback Active)",
+    "similar_snakes": [],
+    "typical_habitat": "Rural and agricultural regions of South Asia",
+    "first_aid_steps": [
+        "Keep calm and minimize movement.",
+        "Immobilize the bitten limb at or below heart level.",
+        "Remove tight jewelry, watches, or clothing.",
+        "Reach a medical facility with antivenom immediately.",
+        "DO NOT cut, suck, or apply tourniquets."
+    ],
 }
 
 # Species labels (any casing) that mean "no identification".
@@ -72,15 +83,7 @@ class ValidationResult:
 
 
 class GeminiIdentification(BaseModel):
-    """Schema for the model's identification JSON (structural validation).
-
-    Structural only — semantic/medical rules live in `_validate_identification`.
-    Unknown keys are ignored and malformed values are coerced to safe defaults
-    (never raising), so a junk response degrades to "not identified" instead of
-    crashing the endpoint. `confidence` is kept raw here and range-checked by
-    `_normalise_confidence` so impossible values (-5, 300, "very sure") are
-    rejected rather than silently clamped.
-    """
+    """Schema for the model's identification JSON (structural validation)."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -89,8 +92,13 @@ class GeminiIdentification(BaseModel):
     species: str | None = None
     common_name: str | None = None
     scientific_name: str | None = None
-    venomous: bool = True  # assume venomous unless the model clearly says otherwise
+    venomous: bool = True
     reasoning: list[str] = Field(default_factory=list)
+    venom_type: str | None = None
+    danger_level: str | None = None
+    similar_snakes: list[str] = Field(default_factory=list)
+    typical_habitat: str | None = None
+    first_aid_steps: list[str] = Field(default_factory=list)
 
     @field_validator("identified", "venomous", mode="before")
     @classmethod
@@ -101,17 +109,16 @@ class GeminiIdentification(BaseModel):
             return v.strip().lower() in {"true", "yes", "y", "1"}
         if isinstance(v, (int, float)):
             return bool(v)
-        # Missing / junk → safe default: identified=False, venomous=True.
         return info.field_name == "venomous"
 
-    @field_validator("species", "common_name", "scientific_name", mode="before")
+    @field_validator("species", "common_name", "scientific_name", "venom_type", "danger_level", "typical_habitat", mode="before")
     @classmethod
     def _coerce_optional_str(cls, v):
         return None if v is None else str(v)
 
-    @field_validator("reasoning", mode="before")
+    @field_validator("reasoning", "similar_snakes", "first_aid_steps", mode="before")
     @classmethod
-    def _coerce_reasoning(cls, v):
+    def _coerce_lists(cls, v):
         if v is None:
             return []
         if isinstance(v, str):
@@ -147,7 +154,11 @@ _IDENTIFY_PROMPT = (
     "OUTPUT - return ONLY valid minified JSON, with no text outside it.\n"
     'If identified: {"identified":true,"species":<name>,"common_name":<common '
     'name>,"scientific_name":<latin name>,"venomous":<true|false>,"confidence":'
-    '<90-100>,"reasoning":[<visible cues you actually saw>]}.\n'
+    '<90-100>,"reasoning":[<visible cues you actually saw>],"venom_type":'
+    '<Neurotoxic|Hemotoxic|Cytotoxic|None>,"danger_level":<Critical|Highly '
+    'Dangerous|Moderately Dangerous|Harmless>,"similar_snakes":[<1-2 similar looking '
+    'snakes>],"typical_habitat":<habitat description>,"first_aid_steps":[<3-5 '
+    'key safety-first first aid steps>]}.\n'
     'Otherwise: {"identified":false,"confidence":<0-89>,"reason":"Insufficient '
     'visual evidence for safe identification.","possible_matches":[<0-2 '
     "plausible names>]}.\n"
@@ -157,14 +168,24 @@ _IDENTIFY_PROMPT = (
     "guess."
 )
 
-_SUMMARIZE_PROMPT = (
-    "You are assisting a clinician who is about to receive a snakebite patient. "
-    "From the monitoring log below, write ONE concise English handover sentence "
-    "(max ~40 words) covering: minutes since the bite, swelling spread, "
-    "neurotoxic signs (ptosis, blurred/double vision, slurred speech, "
-    "drowsiness), haematotoxic signs (bleeding), breathing difficulty, the "
-    "current severity and its trend. Do NOT give a definitive diagnosis — this "
-    "supports clinical assessment. Return only the sentence.\n\n"
+_SEVERITY_PROMPT = (
+    "You are an expert clinical toxicologist specializing in snakebite envenomation triage.\n"
+    "Evaluate the clinical severity based on the following input:\n"
+    "Inputs:\n"
+    "- Symptoms: {symptoms}\n"
+    "- Snake Identification: {snake}\n"
+    "- Time Since Bite: {time_since_bite}\n"
+    "- Swelling Progression: {swelling_progression}\n\n"
+    "Outputs must be in valid JSON format matching this schema:\n"
+    "{{\n"
+    '  "severity": "Mild" | "Moderate" | "Severe" | "Critical",\n'
+    '  "confidence": <float between 0.0 and 1.0>,\n'
+    '  "reasoning": [<list of short clinical bullet points justifying the classification>]\n'
+    "}}\n\n"
+    "Safety Guidelines (Safety-First):\n"
+    "1. CRITICAL: If there are systemic neurotoxic signs (e.g. drooping eyelids/ptosis, slurred speech, drowsiness, breathing issues) OR significant bleeding, severity must be classified as Severe or Critical.\n"
+    "2. If the snake is identified as highly venomous (e.g. Russell's Viper, Indian Cobra, Saw-scaled Viper, Common Krait) and there are systemic symptoms, evaluate as Severe or Critical. If there are no symptoms yet but the bite time is short, rate as Moderate or Severe to ensure safety.\n"
+    "3. Output MUST be valid JSON only, no markdown fences, no extra text."
 )
 
 
@@ -363,6 +384,17 @@ def identify(image_b64: str, mime: str = "image/jpeg") -> dict:
                 "validation_reason": None,
                 "confidence": confidence,
                 "venomous": gm.venomous,
+                "venom_type": (gm.venom_type or ("Neurotoxic & Hemotoxic" if gm.venomous else "None")).strip(),
+                "danger_level": (gm.danger_level or ("Highly Dangerous" if gm.venomous else "Harmless")).strip(),
+                "similar_snakes": gm.similar_snakes or [],
+                "typical_habitat": (gm.typical_habitat or "Vikarabad region").strip(),
+                "first_aid_steps": gm.first_aid_steps or [
+                    "Keep calm and minimize movement.",
+                    "Immobilize the bitten limb at or below heart level.",
+                    "Remove tight jewelry, watches, or clothing.",
+                    "Reach a medical facility with antivenom immediately.",
+                    "DO NOT cut, suck, or apply tourniquets."
+                ]
             }
             logger.info("identify: validation -> ACCEPTED (%s, %.2f)", species, confidence)
         else:
@@ -380,6 +412,17 @@ def identify(image_b64: str, mime: str = "image/jpeg") -> dict:
                 "validation_reason": verdict.reason,
                 "confidence": display_conf,
                 "venomous": True,
+                "venom_type": "Unknown (Assume Neurotoxic & Hemotoxic)",
+                "danger_level": "Critical (Safety Fallback Active)",
+                "similar_snakes": [],
+                "typical_habitat": "Rural and agricultural regions of South Asia",
+                "first_aid_steps": [
+                    "Keep calm and minimize movement.",
+                    "Immobilize the bitten limb at or below heart level.",
+                    "Remove tight jewelry, watches, or clothing.",
+                    "Reach a medical facility with antivenom immediately.",
+                    "DO NOT cut, suck, or apply tourniquets."
+                ]
             }
             logger.info("identify: validation -> REJECTED (reason: %s)", verdict.reason)
 
@@ -474,3 +517,105 @@ def summarize(symptom_log: list, bite_time: str | None, language: str = "en") ->
     except Exception:  # noqa: BLE001
         logger.exception("summarize failed; returning fallback")
         return {"summary": fallback, "source": "fallback"}
+
+
+def _compose_severity_fallback(symptoms: dict, snake: dict | None, mins_since_bite: int, swelling_progression: str) -> dict:
+    has_breathing = symptoms.get("breathing") == "yes"
+    has_vision = symptoms.get("vision") == "yes"
+    has_bleeding = symptoms.get("bleeding") == "yes"
+    has_drowsy = symptoms.get("drowsy") == "yes"
+    
+    is_venomous = snake.get("venomous") if snake else True
+    
+    reasoning = []
+    
+    if has_breathing:
+        reasoning.append("Respiratory compromise or breathing difficulty reported.")
+    if has_vision:
+        reasoning.append("Neurotoxic signs detected (vision impairment or ptosis).")
+    if has_bleeding:
+        reasoning.append("Hemotoxic signs detected (spontaneous bleeding).")
+    if has_drowsy:
+        reasoning.append("Systemic neurological depression (drowsiness / slurred speech).")
+        
+    if swelling_progression == "spreading":
+        reasoning.append("Rapidly spreading localized swelling up the bitten limb.")
+    elif swelling_progression == "local":
+        reasoning.append("Swelling localized to bite site area.")
+        
+    if snake and snake.get("species") and snake.get("species") != "Unidentified":
+        reasoning.append(f"Identified species: {snake.get('species')} ({'Venomous' if is_venomous else 'Non-Venomous'}).")
+    else:
+        reasoning.append("Snake species remains unidentified; treating as potentially venomous for safety.")
+
+    if has_breathing or (has_vision and has_drowsy):
+        severity_level = "Critical"
+    elif has_vision or has_bleeding or has_drowsy:
+        severity_level = "Severe"
+    elif swelling_progression == "spreading":
+        severity_level = "Moderate"
+    else:
+        severity_level = "Mild"
+        
+    reasoning.append(f"Bite duration: {mins_since_bite} minutes elapsed since exposure.")
+    reasoning.append("Clinical assessment always overrides automated triage recommendations.")
+
+    return {
+        "severity": severity_level,
+        "confidence": 0.85,
+        "reasoning": reasoning,
+        "disclaimer": "Never replace professional medical advice. Always remain safety-first. Triage recommendations are tentative.",
+        "source": "fallback"
+    }
+
+
+def evaluate_severity(symptoms: dict, snake: dict | None, mins_since_bite: int, swelling_progression: str) -> dict:
+    """Evaluate triage severity using Gemini or fallback."""
+    fallback = _compose_severity_fallback(symptoms, snake, mins_since_bite, swelling_progression)
+    genai = _genai()
+    if genai is None:
+        return fallback
+    try:
+        model = genai.GenerativeModel(settings.gemini_model)
+        prompt = _SEVERITY_PROMPT.format(
+            symptoms=json.dumps(symptoms),
+            snake=json.dumps(snake) if snake else "None",
+            time_since_bite=f"{mins_since_bite} minutes",
+            swelling_progression=swelling_progression
+        )
+        resp = model.generate_content(prompt)
+        text = (getattr(resp, "text", "") or "").strip()
+        if not text:
+            return fallback
+            
+        data = _extract_json(text)
+        if not data or "severity" not in data:
+            return fallback
+            
+        # Validate/clean
+        severity_val = str(data["severity"]).capitalize()
+        if severity_val not in ["Mild", "Moderate", "Severe", "Critical"]:
+            severity_val = fallback["severity"]
+            
+        confidence_val = data.get("confidence", 0.85)
+        try:
+            confidence_val = float(confidence_val)
+        except (ValueError, TypeError):
+            confidence_val = 0.85
+            
+        reasoning_list = data.get("reasoning", [])
+        if not isinstance(reasoning_list, list):
+            reasoning_list = [str(reasoning_list)]
+        if not reasoning_list:
+            reasoning_list = fallback["reasoning"]
+            
+        return {
+            "severity": severity_val,
+            "confidence": confidence_val,
+            "reasoning": reasoning_list,
+            "disclaimer": "Never replace professional medical advice. Always remain safety-first. Triage recommendations are tentative.",
+            "source": "gemini"
+        }
+    except Exception:  # noqa: BLE001
+        logger.exception("evaluate_severity failed; returning fallback")
+        return fallback

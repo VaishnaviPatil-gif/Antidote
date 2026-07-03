@@ -72,7 +72,7 @@ export function buildPreparation({ severity, t }) {
   const p = t.timeline.prep;
   const vials = requiredVialsFor(severity);
   const items = [];
-  if (severity === "severe") items.push(p.icu);
+  if (severity === "severe" || severity === "critical") items.push(p.icu);
   items.push(p.physician);
   items.push(p.asv(vials));
   items.push(p.triage);

@@ -36,6 +36,7 @@ export const SEVERITY_TONE = {
   mild: C.good,
   moderate: C.amber,
   severe: C.danger,
+  critical: "#7B1FA2",
 };
 
 /** Severity → soft background tint that pairs with SEVERITY_TONE. */
@@ -43,4 +44,5 @@ export const SEVERITY_PALE = {
   mild: C.goodPale,
   moderate: C.amberPale,
   severe: C.dangerPale,
+  critical: "#F3E5F5",
 };

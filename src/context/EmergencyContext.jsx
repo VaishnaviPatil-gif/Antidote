@@ -100,6 +100,7 @@ const DEFAULT_STATE = {
   patientId: null, // string | null
   patientAge: null, // string | null
   patientGender: null, // "male" | "female" | "other" | null
+  snakeImage: null, // base64 photo of the snake
 };
 
 /**
@@ -231,6 +232,8 @@ export function EmergencyProvider({ children }) {
   /** Snake capture writes the `snake` slice. */
   const setSnake = useCallback((snake) => patch({ snake }), [patch]);
 
+  const setSnakeImage = useCallback((snakeImage) => patch({ snakeImage }), [patch]);
+
   /** Severity tracker writes `severity` and appends to `symptomLog`. */
   const setSeverity = useCallback((severity) => patch({ severity }), [patch]);
 
@@ -241,6 +244,27 @@ export function EmergencyProvider({ children }) {
         symptomLog: [...s.symptomLog, entry],
         severity: entry.level ?? s.severity, // keep severity in lockstep
       })),
+    []
+  );
+
+  const updateSymptomLogEntry = useCallback(
+    (index, level, aiSeverity) => {
+      setState((s) => {
+        const symptomLog = [...s.symptomLog];
+        if (symptomLog[index]) {
+          symptomLog[index] = {
+            ...symptomLog[index],
+            level,
+            aiSeverity
+          };
+        }
+        return {
+          ...s,
+          symptomLog,
+          severity: index === symptomLog.length - 1 ? level : s.severity
+        };
+      });
+    },
     []
   );
 
@@ -411,8 +435,10 @@ export function EmergencyProvider({ children }) {
       startEmergency,
       setVictimLocation,
       setSnake,
+      setSnakeImage,
       setSeverity,
       appendSymptom,
+      updateSymptomLogEntry,
       setEmergencyContact,
       addEmergencyContact,
       removeEmergencyContact,
@@ -433,8 +459,10 @@ export function EmergencyProvider({ children }) {
       startEmergency,
       setVictimLocation,
       setSnake,
+      setSnakeImage,
       setSeverity,
       appendSymptom,
+      updateSymptomLogEntry,
       setEmergencyContact,
       addEmergencyContact,
       removeEmergencyContact,

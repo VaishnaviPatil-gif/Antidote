@@ -10,7 +10,7 @@ import { tFor } from "../i18n.js";
 import { useEmergency, minutesSinceBite } from "../context/EmergencyContext.jsx";
 import { useOnline } from "../hooks/useOnline.js";
 import { composeSummary, RANK } from "../lib/handover.js";
-import { summarizeSymptoms } from "../lib/api.js";
+import { summarizeSymptoms, evaluateSeverity } from "../lib/api.js";
 
 /**
  * Severity tracker (§2.5) — the medical core.
@@ -137,15 +137,70 @@ export default function Tracker() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symptomLog.length]);
 
+  const [evaluating, setEvaluating] = useState(false);
+
   const openCheck = useCallback(() => {
     setAnswers(DEFAULT_ANSWERS);
     setFormOpen(true);
   }, []);
 
-  const saveCheck = useCallback(() => {
-    appendSymptom({ t: new Date(), answers: { ...answers }, level: computeLevel(answers) });
-    setFormOpen(false);
-  }, [answers, appendSymptom]);
+  const saveCheck = async () => {
+    setEvaluating(true);
+    const mins = biteTime
+      ? Math.max(0, Math.floor((Date.now() - new Date(biteTime).getTime()) / 60000))
+      : 18;
+
+    try {
+      const res = await evaluateSeverity(answers, snake, mins, answers.swelling);
+      if (res && res.severity) {
+        appendSymptom({
+          t: new Date(),
+          answers: { ...answers },
+          level: res.severity.toLowerCase(),
+          aiSeverity: res
+        });
+      } else {
+        throw new Error("Failed to evaluate severity");
+      }
+    } catch (err) {
+      // Offline fallback
+      const localLevel = computeLevel(answers);
+      const fallbackResponse = {
+        severity: localLevel.charAt(0).toUpperCase() + localLevel.slice(1),
+        confidence: 0.85,
+        reasoning: [
+          "Analyzed using local rules engine (offline fallback).",
+          answers.swelling === "spreading" ? "Spreading swelling up the limb." : "Local swelling only.",
+          (answers.breathing === "yes" || answers.vision === "yes" || answers.bleeding === "yes" || answers.drowsy === "yes")
+            ? "Systemic symptoms detected."
+            : "Local symptoms only."
+        ],
+        disclaimer: "Never replace professional medical advice. Always remain safety-first.",
+        source: "fallback"
+      };
+      appendSymptom({
+        t: new Date(),
+        answers: { ...answers },
+        level: localLevel,
+        aiSeverity: fallbackResponse
+      });
+
+      // Enqueue sync action
+      const logIndex = symptomLog.length;
+      import("../lib/sync.js").then(({ enqueueAction }) => {
+        enqueueAction("EVALUATE_SEVERITY", {
+          answers,
+          snake,
+          mins,
+          swelling: answers.swelling,
+          logIndex
+        });
+      });
+    } finally {
+      setEvaluating(false);
+      setFormOpen(false);
+    }
+  };
 
   const setAns = (key, val) => setAnswers((a) => ({ ...a, [key]: val }));
 
@@ -235,6 +290,57 @@ export default function Tracker() {
                 {t.tracker.firstCheck}
               </span>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── AI Severity Analysis Card ──────────────────────────── */}
+      {hasLog && lastEntry?.aiSeverity && (
+        <div
+          className="rounded-2xl bg-white border p-4 flex flex-col gap-3 shadow-sm"
+          style={{ borderColor: "#E1EAE9" }}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold tracking-wider uppercase" style={{ color: C.teal }}>
+              🧠 {t.tracker.aiTitle}
+            </span>
+            <span
+              className="text-[10px] font-black rounded-full px-2 py-0.5 uppercase tracking-wide"
+              style={{
+                background: lastEntry.aiSeverity.source === "gemini" ? C.tealPale : "#F2F7F6",
+                color: lastEntry.aiSeverity.source === "gemini" ? C.teal : C.muted
+              }}
+            >
+              {lastEntry.aiSeverity.source === "gemini" ? "Gemini Live" : "Offline Rule"}
+            </span>
+          </div>
+
+          <div className="flex items-baseline gap-2">
+            <span className="text-xl font-black" style={{ color: SEVERITY_TONE[lastEntry.aiSeverity.severity.toLowerCase()] || C.dark }}>
+              {t[lastEntry.aiSeverity.severity.toLowerCase()] || lastEntry.aiSeverity.severity}
+            </span>
+            <span className="text-xs font-semibold" style={{ color: C.muted }}>
+              ({t.tracker.aiConfidence}: {Math.round(lastEntry.aiSeverity.confidence * 100)}%)
+            </span>
+          </div>
+
+          <div className="border-t pt-2.5 flex flex-col gap-1.5" style={{ borderColor: "#F2F7F6" }}>
+            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+              {t.tracker.aiReasoning}
+            </span>
+            <ul className="list-disc pl-4 text-xs leading-snug space-y-1" style={{ color: C.dark }}>
+              {lastEntry.aiSeverity.reasoning.map((item, idx) => (
+                <li key={idx}>{item}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div
+            className="rounded-xl p-2.5 text-[10px] font-medium leading-normal flex items-start gap-2 border"
+            style={{ background: "#FDF3F2", borderColor: "#F0CFC9", color: C.danger }}
+          >
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            <span>{lastEntry.aiSeverity.disclaimer}</span>
           </div>
         </div>
       )}
@@ -331,11 +437,21 @@ export default function Tracker() {
 
             <button
               onClick={saveCheck}
+              disabled={evaluating}
               className="w-full rounded-xl text-white font-bold flex items-center justify-center gap-2 active:scale-[.98] transition-transform"
               style={{ background: C.teal, height: 52, fontSize: 16 }}
             >
-              <CheckCircle2 size={18} />
-              {t.tracker.submit}
+              {evaluating ? (
+                <>
+                  <Loader2 size={18} className="ap-spin" />
+                  {t.tracker.aiAnalyzing}
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={18} />
+                  {t.tracker.submit}
+                </>
+              )}
             </button>
           </div>
         </div>

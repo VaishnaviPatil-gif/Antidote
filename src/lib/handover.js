@@ -6,15 +6,16 @@
  */
 
 /** Severity ordering for trend comparisons. */
-export const RANK = { mild: 0, moderate: 1, severe: 2 };
+export const RANK = { mild: 0, moderate: 1, severe: 2, critical: 3 };
 
 /**
  * ASV vials to prepare for a given severity (same thresholds the routing
  * engine uses to size "adequate" stock).
- * @param {"mild"|"moderate"|"severe"} severity
+ * @param {"mild"|"moderate"|"severe"|"critical"} severity
  * @returns {number}
  */
 export function requiredVialsFor(severity) {
+  if (severity === "critical") return 15;
   return severity === "severe" ? 10 : severity === "moderate" ? 6 : 4;
 }
 
