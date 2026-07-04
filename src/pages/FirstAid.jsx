@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Clock, Check, X, Camera, ChevronRight, SkipForward, HeartPulse,
@@ -7,6 +7,8 @@ import {
 import { C } from "../theme.js";
 import { tFor } from "../i18n.js";
 import { useEmergency } from "../context/EmergencyContext.jsx";
+import BackButton from "../components/BackButton.jsx";
+import { speak as speakTts, stop as stopTts, isTtsAvailable } from "../lib/ttsService.js";
 
 /**
  * First aid (§2.4) — shown immediately, while the victim moves toward care.
@@ -37,113 +39,86 @@ export default function FirstAid() {
   const clock =
     elapsedSec != null ? `${mm}:${String(ss).padStart(2, "0")}` : "—:—";
 
-  // ── Voice Guided First Aid State & Logic ───────────────────────
-  const [isPlaying, setIsPlaying] = useState(false);
+  // ── Voice-guided first aid (via ttsService) ────────────────────
+  // All speech goes through ttsService, which uses the native OS text-to-speech
+  // engine inside the Capacitor Android/iOS shell and falls back to the browser
+  // speechSynthesis on web. This screen no longer touches window.speechSynthesis
+  // directly. Missing regional voices fall back to English inside the service,
+  // so a real device never shows "voice unavailable".
+  const [voiceStatus, setVoiceStatus] = useState("idle"); // idle | playing
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1);
+  const playIdRef = useRef(0);
+  const isPlaying = voiceStatus === "playing";
+  const ttsAvailable = isTtsAvailable();
 
-  // Compile full array of instructions
-  const sentences = useMemo(() => {
-    return [
-      t.firstAid.title,
-      t.firstAid.doTitle,
-      ...t.firstAid.doItems,
-      t.firstAid.dontTitle,
-      ...t.firstAid.dontItems
-    ];
-  }, [t]);
+  // Full ordered guidance (title → DO list → DON'T list), rebuilt per language.
+  const sentences = useMemo(() => [
+    t.firstAid.title,
+    t.firstAid.doTitle,
+    ...t.firstAid.doItems,
+    t.firstAid.dontTitle,
+    ...t.firstAid.dontItems,
+  ], [t]);
 
-  // Cancel speech on unmount
-  useEffect(() => {
-    return () => {
-      window.speechSynthesis?.cancel();
-    };
-  }, []);
+  // Localised status labels (kept trilingual like the rest of the UI).
+  const voiceLabels = {
+    en: { idle: "Play voice guide", playing: "Playing…", unavailable: "Voice not available on this device" },
+    hi: { idle: "वॉयस गाइड चलाएँ", playing: "चल रहा है…", unavailable: "इस डिवाइस पर वॉयस उपलब्ध नहीं" },
+    te: { idle: "వాయిస్ గైడ్ ప్లే చేయండి", playing: "ప్లే అవుతోంది…", unavailable: "ఈ పరికరంలో వాయిస్ అందుబాటులో లేదు" },
+  };
+  const labels = voiceLabels[language] || voiceLabels.en;
+  const vLabel = !ttsAvailable ? labels.unavailable : isPlaying ? labels.playing : labels.idle;
 
-  // Speak a specific sentence index
-  const speakSentence = useCallback((index) => {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-
-    if (index < 0 || index >= sentences.length) {
-      setIsPlaying(false);
-      setCurrentSentenceIndex(-1);
-      return;
-    }
-
-    setCurrentSentenceIndex(index);
-    const text = sentences[index];
-    const utterance = new SpeechSynthesisUtterance(text);
-
-    // Voice language mapping
-    let voiceLang = "en-IN";
-    if (language === "hi") voiceLang = "hi-IN";
-    if (language === "te") voiceLang = "te-IN";
-
-    const voices = window.speechSynthesis.getVoices();
-    let voice = voices.find(v => v.lang.toLowerCase().includes(voiceLang.toLowerCase()));
-    
-    // Fallback if Telugu voice is missing
-    if (!voice && language === "te") {
-      voice = voices.find(v => v.lang.toLowerCase().includes("hi-in")) || 
-              voices.find(v => v.lang.toLowerCase().includes("en-in"));
-    }
-    
-    if (voice) utterance.voice = voice;
-    utterance.lang = voiceLang;
-    
-    utterance.onend = () => {
-      setCurrentSentenceIndex((prev) => {
-        const next = prev + 1;
-        if (next < sentences.length) {
-          speakSentence(next);
-          return next;
-        } else {
-          setIsPlaying(false);
-          return -1;
-        }
-      });
-    };
-
-    utterance.onerror = () => {
-      setIsPlaying(false);
-    };
-
-    window.speechSynthesis.speak(utterance);
-  }, [sentences, language]);
-
-  // Play / Pause toggler
-  const togglePlay = useCallback(() => {
-    if (!window.speechSynthesis) return;
-
-    if (isPlaying) {
-      window.speechSynthesis.pause();
-      setIsPlaying(false);
-    } else {
-      setIsPlaying(true);
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      } else {
-        const startIndex = currentSentenceIndex >= 0 ? currentSentenceIndex : 0;
-        speakSentence(startIndex);
-      }
-    }
-  }, [isPlaying, currentSentenceIndex, speakSentence]);
-
-  // Reset speech completely
-  const resetSpeech = useCallback(() => {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    setIsPlaying(false);
+  // Stop playback and clear the highlight. Bumping playIdRef invalidates any
+  // in-flight sentence chain so it can't resume after we stop.
+  const stopVoice = useCallback(() => {
+    playIdRef.current += 1;
+    stopTts();
+    setVoiceStatus("idle");
     setCurrentSentenceIndex(-1);
   }, []);
 
-  // Stop speech when language is switched
+  // Speak the whole guidance one sentence at a time so the current line can be
+  // highlighted. The monotonic playId guarantees no overlapping speech: any
+  // stop / language-switch / re-tap supersedes the running chain.
+  const startVoice = useCallback(async () => {
+    await stopTts(); // never overlap with a previous run
+    const myId = ++playIdRef.current;
+    setVoiceStatus("playing");
+    for (let i = 0; i < sentences.length; i++) {
+      if (playIdRef.current !== myId) return; // superseded or stopped
+      setCurrentSentenceIndex(i);
+      await speakTts(sentences[i], language); // falls back to English internally
+    }
+    if (playIdRef.current === myId) {
+      setVoiceStatus("idle");
+      setCurrentSentenceIndex(-1);
+    }
+  }, [sentences, language]);
+
+  // First tap → play; second tap → stop.
+  const togglePlay = useCallback(() => {
+    if (!ttsAvailable) return;
+    if (isPlaying) stopVoice();
+    else startVoice();
+  }, [ttsAvailable, isPlaying, stopVoice, startVoice]);
+
+  const resetSpeech = useCallback(() => stopVoice(), [stopVoice]);
+
+  // Switching language stops playback so the next play uses the new language.
   useEffect(() => {
-    resetSpeech();
-  }, [language, resetSpeech]);
+    stopVoice();
+  }, [language, stopVoice]);
+
+  // Stop any speech when leaving the page.
+  useEffect(() => {
+    return () => { stopTts(); };
+  }, []);
 
   return (
     <div className="px-4 pt-4 pb-6 flex flex-col gap-4">
+      <BackButton className="self-start" />
+
       {/* ── Live time since bite ───────────────────────────────── */}
       <div
         className="rounded-2xl bg-white border flex items-center gap-3 px-4 py-3"
@@ -196,26 +171,40 @@ export default function FirstAid() {
           )}
         </div>
 
-        {/* Large Control Buttons */}
-        <div className="flex items-center justify-center gap-4">
-          <button
-            onClick={resetSpeech}
-            disabled={currentSentenceIndex === -1}
-            aria-label="Reset Voice"
-            className="rounded-full w-11 h-11 flex items-center justify-center border active:scale-95 transition-transform disabled:opacity-40"
-            style={{ borderColor: "#C5DBD9", background: "#fff", color: C.teal }}
+        {/* Large Control Buttons + live status text */}
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={resetSpeech}
+              disabled={currentSentenceIndex === -1}
+              aria-label="Reset Voice"
+              className="rounded-full w-11 h-11 flex items-center justify-center border active:scale-95 transition-transform disabled:opacity-40"
+              style={{ borderColor: "#C5DBD9", background: "#fff", color: C.teal }}
+            >
+              <RotateCcw size={18} />
+            </button>
+
+            <button
+              onClick={togglePlay}
+              disabled={!ttsAvailable}
+              aria-label={isPlaying ? "Stop Voice" : "Play Voice"}
+              className="rounded-full w-14 h-14 flex items-center justify-center text-white active:scale-95 transition-transform disabled:opacity-40"
+              style={{ background: C.teal }}
+            >
+              {isPlaying ? <Pause size={24} fill="#fff" /> : <Play size={24} fill="#fff" className="ml-1" />}
+            </button>
+
+            {/* Balances the reset button so the play button stays centred. */}
+            <div className="w-11 h-11" aria-hidden="true" />
+          </div>
+
+          <div
+            className="text-xs font-bold text-center"
+            style={{ color: !ttsAvailable ? C.danger : C.teal }}
+            aria-live="polite"
           >
-            <RotateCcw size={18} />
-          </button>
-          
-          <button
-            onClick={togglePlay}
-            aria-label={isPlaying ? "Pause Voice" : "Play Voice"}
-            className="rounded-full w-14 h-14 flex items-center justify-center text-white active:scale-95 transition-transform"
-            style={{ background: C.teal }}
-          >
-            {isPlaying ? <Pause size={24} fill="#fff" /> : <Play size={24} fill="#fff" className="ml-1" />}
-          </button>
+            {vLabel}
+          </div>
         </div>
 
         {/* Language selector for Voice guidance */}
