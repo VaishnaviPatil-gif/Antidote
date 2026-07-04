@@ -22,14 +22,15 @@ export function requiredVialsFor(severity) {
 /**
  * Demo fallback for the recommended hospital, used only until the routing
  * screen writes the real choice into context (Step 10). Matches the seeded
- * District Hospital Vikarabad scenario from the routing data.
+ * Malla Reddy Narayana scenario (nearest stocked facility to the university).
  */
 export const DEMO_RECOMMENDED = {
-  name: "District Hospital Vikarabad",
-  tierKey: "dh",
-  eta: 27,
-  km: 16,
-  vials: 30,
+  id: "mrn",
+  name: "Malla Reddy Narayana Multispeciality",
+  tierKey: "tertiary",
+  eta: 7,
+  km: 3,
+  vials: 22,
   icu: true,
 };
 

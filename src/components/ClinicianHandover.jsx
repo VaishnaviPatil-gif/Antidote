@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Stethoscope, Clock, Timer, MapPin, Building2, Activity, ShieldAlert,
   Droplets, HeartPulse, ClipboardList, User, Languages, RadioTower,
@@ -28,7 +28,7 @@ import { copyToClipboard, shareOrCopy } from "../lib/share.js";
  *   status   — "confirmed" | "enroute" | "pending" (drives the status line).
  */
 export default function ClinicianHandover({ hospital, status }) {
-  const { language, patientId, patientAge, patientGender, setPatientInfo } = useEmergency();
+  const { language, biteTime, patientId, patientAge, patientGender, setPatientInfo } = useEmergency();
   const t = tFor(language);
   const h = t.handover;
   const model = useHandoverModel({ hospital, status });
@@ -69,35 +69,90 @@ export default function ClinicianHandover({ hospital, status }) {
   // ── QR Code Handover Generation ──────────────────────────────────────────
   const [showQr, setShowQr] = useState(false);
   const [qrUrl, setQrUrl] = useState("");
+  const [qrError, setQrError] = useState(false);
 
+  // What the QR encodes depends on whether a PUBLIC web host exists:
+  //   • VITE_PUBLIC_BASE set (a deployed build) → a short URL that OPENS the rich
+  //     viewer when scanned. This is the only way a QR can "open a page".
+  //   • Not set (the local APK, whose origin is https://localhost — unreachable
+  //     from another phone) → the FULL handover as plain TEXT, so any standard
+  //     phone camera shows the complete details with no app and no server.
+  // Either way we keep it single-byte where possible and use a wide quiet zone so
+  // a doctor's camera reads it off the patient's screen reliably.
   useEffect(() => {
-    const symptomsList = Array.isArray(model.symptoms) ? model.symptoms : [];
-    const handoverData = {
-      patientId: patientId || h.notRecorded,
-      patientAge: patientAge || h.notRecorded,
-      patientGender: patientGender ? h.genderOpts[patientGender] : h.notRecorded,
-      severity: model.severityLabel,
-      timeSince: model.timeSince,
-      snake: model.snakeName,
-      hospital: model.hospitalName,
-      gps: model.gps,
-      symptoms: symptomsList,
-      treatment: model.treatment,
-      firstAid: t.firstAid.doItems,
-      biteTime: model.biteTime
-    };
+    let cancelled = false;
+    setQrError(false);
+    setQrUrl("");
 
-    const payload = encodeURIComponent(JSON.stringify(handoverData));
-    const viewUrl = `${window.location.origin}/handover-viewer?data=${payload}`;
+    const caseId = biteTime ? new Date(biteTime).getTime().toString(36) : "na";
+    const NR = model.notRecorded;
+    const has = (v) => v && v !== NR;
+    const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-    import("qrcode").then((QRCodeLib) => {
-      QRCodeLib.default.toDataURL(viewUrl, { width: 220, margin: 1 }, (err, url) => {
-        if (!err) setQrUrl(url);
+    const publicBase = (import.meta.env?.VITE_PUBLIC_BASE ?? "").replace(/\/+$/, "");
+    let payload;
+    if (publicBase) {
+      const params = new URLSearchParams({
+        id: caseId,
+        sev: model.severityKey,
+        hosp: model.hospitalName,
+        t: model.timeSince,
       });
-    }).catch((err) => {
-      console.error("Failed to load qrcode library", err);
-    });
-  }, [patientId, patientAge, patientGender, model, t, h, language]);
+      payload = `${publicBase}/handover-viewer?${params.toString()}`;
+    } else {
+      // Full text handover. Severity uses the english key (single-byte) so the
+      // code stays low-density and easy to scan regardless of UI language.
+      const lines = [
+        "ANTIDOTE+ SNAKEBITE HANDOVER",
+        `Severity: ${cap(model.severityKey)}`,
+        `Time since bite: ${model.timeSince}`,
+      ];
+      if (has(model.snakeName)) {
+        lines.push(`Suspected: ${model.snakeName}${has(model.confidence) ? ` (${model.confidence})` : ""}`);
+      }
+      lines.push(`Hospital: ${model.hospitalName}${has(model.eta) ? ` - ETA ${model.eta}` : ""}`);
+      lines.push(`Antivenom: ${model.antivenom}`);
+      lines.push(`ICU needed: ${model.icuValue}`);
+      if (Array.isArray(model.symptoms) && model.symptoms.length) {
+        lines.push(`Symptoms: ${model.symptoms.join("; ")}`);
+      }
+      if (has(model.gps)) lines.push(`GPS: ${model.gps}`);
+      lines.push(`Case ID: ${caseId}`);
+      payload = lines.join("\n");
+    }
+
+    import("qrcode")
+      .then((QRCodeLib) =>
+        QRCodeLib.default.toDataURL(payload, {
+          // Level L → lowest module density → easiest for a phone camera to read
+          // a screen-displayed code (error correction only matters for damaged /
+          // printed codes, not a crisp on-screen one).
+          errorCorrectionLevel: "L",
+          margin: 4,                              // wider quiet zone
+          width: 360,                             // hi-res so it stays crisp when displayed large
+          color: { dark: "#000000", light: "#ffffff" },
+        })
+      )
+      .then((url) => { if (!cancelled) setQrUrl(url); })
+      .catch((err) => {
+        console.error("QR generation failed", err);
+        if (!cancelled) setQrError(true);
+      });
+
+    return () => { cancelled = true; };
+  }, [
+    biteTime,
+    model.severityKey,
+    model.timeSince,
+    model.snakeName,
+    model.confidence,
+    model.hospitalName,
+    model.eta,
+    model.antivenom,
+    model.icuValue,
+    model.gps,
+    (model.symptoms || []).join("|"),
+  ]);
 
   const tone = model.severityTone;
 
@@ -328,18 +383,32 @@ export default function ClinicianHandover({ hospital, status }) {
               {h.qrTitle}
             </div>
             
-            {qrUrl ? (
-              <div className="p-2 border rounded-xl bg-white shadow-inner mt-1">
-                <img src={qrUrl} alt="Handover QR Code" className="w-[180px] h-[180px]" />
+            {qrError ? (
+              <div className="w-[260px] h-[260px] flex items-center justify-center text-center text-xs font-bold px-4" style={{ color: C.danger }}>
+                {h.qrError || "Couldn't generate the QR code."}
+              </div>
+            ) : qrUrl ? (
+              <div className="p-3 border rounded-xl bg-white shadow-inner mt-1">
+                <img
+                  src={qrUrl}
+                  alt="Handover QR Code"
+                  width={260}
+                  height={260}
+                  className="w-[260px] h-[260px]"
+                  style={{ imageRendering: "pixelated" }}
+                />
               </div>
             ) : (
-              <div className="w-[180px] h-[180px] flex items-center justify-center text-xs font-bold" style={{ color: C.muted }}>
-                Generating...
+              <div className="w-[260px] h-[260px] flex items-center justify-center text-xs font-bold" style={{ color: C.muted }}>
+                Generating…
               </div>
             )}
             
-            <p className="text-[10px] text-center leading-normal mt-1 max-w-[200px]" style={{ color: C.muted }}>
+            <p className="text-[10px] text-center leading-normal mt-1 max-w-[220px]" style={{ color: C.muted }}>
               {h.qrDesc}
+            </p>
+            <p className="text-[10px] font-semibold text-center leading-normal max-w-[220px]" style={{ color: C.teal }}>
+              Scan with any phone camera — no app needed.
             </p>
           </div>
         )}
