@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ChevronLeft, Clock, Activity, MapPin, AlertTriangle, CheckCircle2,
+  ChevronLeft, ChevronRight, Clock, Activity, MapPin, AlertTriangle, CheckCircle2,
   Boxes, ShieldCheck, Timer, Stethoscope
 } from "lucide-react";
 import { C, FRAME_BG, SEVERITY_TONE, SEVERITY_PALE } from "../theme.js";

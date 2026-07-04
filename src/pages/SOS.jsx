@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Send, Clock, Activity, MapPin, User, Phone, RefreshCw,
   CheckCircle2, Loader2, Building2, Hospital as HospitalIcon, Inbox, ChevronRight,
-  X, Plus, Star, Share2, Check,
+  X, Plus, Star, Share2, Check, HeartPulse,
 } from "lucide-react";
 import { C, SEVERITY_TONE } from "../theme.js";
 import { tFor } from "../i18n.js";
@@ -12,6 +12,7 @@ import { useOnline } from "../hooks/useOnline.js";
 import { composeSummary, buildAlertMessage, mapsLink, DEMO_RECOMMENDED } from "../lib/handover.js";
 import { startCall, openSms, shareOrCopy } from "../lib/share.js";
 import EmergencyTimeline from "../components/EmergencyTimeline.jsx";
+import BackButton from "../components/BackButton.jsx";
 import {
   buildTimeline, buildPreparation, deriveCurrentIndex,
   loadStamps, saveStamps, stampCompleted, COORD_STAGES,
@@ -223,6 +224,7 @@ export default function SOS() {
     <div className="px-4 pt-4 pb-6 flex flex-col gap-4">
       {/* ── Title ──────────────────────────────────────────────── */}
       <div className="flex items-start gap-2">
+        <BackButton />
         <Send size={20} style={{ color: C.teal }} className="shrink-0 mt-0.5" />
         <div>
           <h1 className="text-lg font-extrabold leading-tight" style={{ color: C.dark }}>

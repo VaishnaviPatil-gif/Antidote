@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  ShieldQuestion, CalendarDays, Moon, MapPin, Info, ChevronLeft, Flashlight,
+  ShieldQuestion, CalendarDays, Moon, MapPin, Info, Flashlight,
 } from "lucide-react";
 import { C } from "../theme.js";
 import { tFor } from "../i18n.js";
 import { useEmergency } from "../context/EmergencyContext.jsx";
 import { DISTRICTS, computeRisk } from "../lib/risk.js";
+import BackButton from "../components/BackButton.jsx";
 
 /**
  * Learn & prevent — the high-risk indicator (§2.6).
@@ -29,7 +29,6 @@ const FACTOR_META = {
 };
 
 export default function Learn() {
-  const navigate = useNavigate();
   const { language } = useEmergency();
   const t = tFor(language);
 
@@ -48,18 +47,9 @@ export default function Learn() {
 
   return (
     <div className="px-4 pt-4 pb-6 flex flex-col gap-4">
-      {/* Back to Home (prevention is reached from Home, never the flow). */}
-      <button
-        onClick={() => navigate("/")}
-        className="flex items-center gap-1 text-sm font-semibold self-start"
-        style={{ color: C.teal }}
-      >
-        <ChevronLeft size={16} />
-        {t.common.back}
-      </button>
-
-      {/* ── Title ──────────────────────────────────────────────── */}
+      {/* ── Title (with consistent back control) ───────────────── */}
       <div className="flex items-start gap-2">
+        <BackButton />
         <ShieldQuestion size={20} style={{ color: C.teal }} className="shrink-0 mt-0.5" />
         <div>
           <h1 className="text-lg font-extrabold leading-tight" style={{ color: C.dark }}>

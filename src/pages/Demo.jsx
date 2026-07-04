@@ -18,10 +18,10 @@ const SIMULATED_GPS_STEPS = [
 export default function Demo() {
   const navigate = useNavigate();
   const { 
-    biteTime, 
-    setVictimLocation, 
-    setState, 
-    resetEmergency 
+    biteTime,
+    setVictimLocation,
+    patch,
+    resetEmergency
   } = useEmergency();
 
   const [activeScenario, setActiveScenario] = useState("");
@@ -63,8 +63,7 @@ export default function Demo() {
     setVialsVikarabad(24);
 
     // 2. Set severe symptoms & mock identification in context
-    setState((s) => ({
-      ...s,
+    patch({
       biteTime: testBiteTime,
       snake: {
         species: "Spectacled Cobra",
@@ -93,7 +92,7 @@ export default function Demo() {
       ],
       victimLocation: { lat: 17.6186, lng: 77.8188 },
       victimLabel: "Marpally Region (Bite Location)"
-    }));
+    });
     setGpsStepIndex(0);
     setTimelineStage("route");
     updateTimelineStamps(testBiteTime, "route");
@@ -113,8 +112,7 @@ export default function Demo() {
     setVialsMarpally(0);
     setVialsVikarabad(2);
 
-    setState((s) => ({
-      ...s,
+    patch({
       biteTime: testBiteTime,
       snake: {
         species: "Common Krait",
@@ -143,7 +141,7 @@ export default function Demo() {
       ],
       victimLocation: { lat: 17.3310, lng: 77.9010 },
       victimLabel: "Vikarabad Region"
-    }));
+    });
     setGpsStepIndex(4);
     setTimelineStage("handover");
     updateTimelineStamps(testBiteTime, "handover");
