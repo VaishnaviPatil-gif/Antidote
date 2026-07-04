@@ -11,6 +11,7 @@ import { useEmergency, minutesSinceBite } from "../context/EmergencyContext.jsx"
 import { useOnline } from "../hooks/useOnline.js";
 import { composeSummary, RANK } from "../lib/handover.js";
 import { summarizeSymptoms, evaluateSeverity } from "../lib/api.js";
+import BackButton from "../components/BackButton.jsx";
 
 /**
  * Severity tracker (§2.5) — the medical core.
@@ -57,7 +58,7 @@ function computeLevel(a) {
 }
 
 export default function Tracker() {
-  const { language, severity, symptomLog, appendSymptom, biteTime } = useEmergency();
+  const { language, severity, symptomLog, appendSymptom, biteTime, snake } = useEmergency();
   const t = tFor(language);
   const online = useOnline();
   const navigate = useNavigate();
@@ -208,6 +209,7 @@ export default function Tracker() {
     <div className="px-4 pt-4 pb-6 flex flex-col gap-4">
       {/* ── Title + framing ────────────────────────────────────── */}
       <div className="flex items-start gap-2">
+        <BackButton />
         <Activity size={20} style={{ color: C.teal }} className="shrink-0 mt-0.5" />
         <div>
           <h1 className="text-lg font-extrabold leading-tight" style={{ color: C.dark }}>

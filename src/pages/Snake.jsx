@@ -11,6 +11,8 @@ import { C, FRAME_BG } from "../theme.js";
 import { tFor } from "../i18n.js";
 import { useEmergency } from "../context/EmergencyContext.jsx";
 import { identifySnake } from "../lib/api.js";
+import { compressImageFile, readFileAsDataUrl } from "../lib/image.js";
+import BackButton from "../components/BackButton.jsx";
 
 /**
  * Snake capture (§2.3) — OPTIONAL, never blocks the emergency flow.
@@ -43,16 +45,29 @@ export default function Snake() {
       const file = e.target.files?.[0];
       e.target.value = ""; // allow re-selecting the same file
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const dataUrl = reader.result;
+      setStatus("analyzing");
+      (async () => {
+        // Downscale + compress FIRST. Raw phone photos are far too large to POST
+        // as base64 (they time out / exceed the vision model limit on mobile);
+        // this shrinks the payload to ~50–150 KB. Falls back to the raw file if
+        // the canvas step is unavailable.
+        let dataUrl;
+        try {
+          dataUrl = await compressImageFile(file, { maxEdge: 1024, quality: 0.72 });
+        } catch {
+          try {
+            dataUrl = await readFileAsDataUrl(file);
+          } catch {
+            setStatus("idle");
+            return;
+          }
+        }
         setPreview(dataUrl);
         setSnakeImage(dataUrl);
-        setStatus("analyzing");
-        
+
         const r = await identifySnake(dataUrl);
         const { _failed, ...snakeData } = r;
-        
+
         setSnake(snakeData);
         setResult(snakeData);
         setFailed(_failed);
@@ -64,8 +79,7 @@ export default function Snake() {
             enqueueAction("IDENTIFY_SNAKE", { imageB64: dataUrl });
           });
         }
-      };
-      reader.readAsDataURL(file);
+      })();
     },
     [setSnake, setSnakeImage]
   );
@@ -99,12 +113,13 @@ export default function Snake() {
 
   return (
     <div className="px-4 pt-4 pb-6 flex flex-col gap-4">
-      {/* Hidden capture input — camera on mobile, gallery on desktop. */}
+      {/* Hidden file input. No `capture` attribute → on mobile the OS shows a
+          chooser with BOTH "Camera" and "Gallery/Files", so pre-saved snake
+          photos (e.g. demo images) can be uploaded, not just live shots. */}
       <input
         ref={fileRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={onFile}
         className="hidden"
         aria-hidden="true"
@@ -113,6 +128,7 @@ export default function Snake() {
 
       {/* ── Title + framing ────────────────────────────────────── */}
       <div className="flex items-start gap-2">
+        <BackButton />
         <Camera size={20} style={{ color: C.teal }} className="shrink-0 mt-0.5" />
         <div className="min-w-0">
           <h1 className="text-lg font-extrabold leading-tight" style={{ color: C.dark }}>

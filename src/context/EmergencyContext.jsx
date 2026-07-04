@@ -54,6 +54,17 @@ const FRESH_LAUNCH = (() => {
   }
 })();
 
+/** Shallow field-equality for the recommended-hospital slice. Used to drop
+ *  redundant writes so routing's recompute→write→recompute path can't loop. */
+function sameHospital(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => a[k] === b[k]);
+}
+
 /** Monotonic id source for contacts (unique within an app session). */
 let CONTACT_SEQ = 0;
 function makeContactId() {
@@ -318,10 +329,20 @@ export function EmergencyProvider({ children }) {
     });
   }, []);
 
-  /** Routing writes the chosen hospital so SOS + the hospital view can read it. */
+  /** Routing writes the chosen hospital so SOS + the hospital view can read it.
+   *  Routing recomputes `recommended` (a fresh object) on every render and writes
+   *  it back here; it also reads this value back in (via liveCaseInfo → ranked →
+   *  recommended). Without a guard that read-back would flip identity every render
+   *  and spin an infinite update loop, so we skip writes that don't change any
+   *  field — returning the SAME state ref makes React bail out of the re-render. */
   const setRecommendedHospital = useCallback(
-    (recommendedHospital) => patch({ recommendedHospital }),
-    [patch]
+    (recommendedHospital) =>
+      setState((s) =>
+        sameHospital(s.recommendedHospital, recommendedHospital)
+          ? s
+          : { ...s, recommendedHospital }
+      ),
+    []
   );
 
   /**
@@ -382,8 +403,8 @@ export function EmergencyProvider({ children }) {
       ...DEFAULT_STATE,
       language: s.language,
       biteTime: new Date(now - 18 * 60000),
-      victimLocation: { lat: 17.27, lng: 77.77 },
-      victimLabel: "Marpally, Vikarabad",
+      victimLocation: { lat: 17.56229, lng: 78.4538 },
+      victimLabel: "Malla Reddy University, Hyderabad",
       snake: { species: "Russell's Viper", confidence: 0.93, venomous: true },
       severity: "severe",
       symptomLog: [
@@ -405,11 +426,12 @@ export function EmergencyProvider({ children }) {
         { id: "demo-2", name: "Ravi (brother)", phone: "+91 90000 11111" },
       ],
       recommendedHospital: {
-        name: "District Hospital Vikarabad",
-        tierKey: "dh",
-        eta: 27,
-        km: 16,
-        vials: 30,
+        id: "mrn",
+        name: "Malla Reddy Narayana Multispeciality",
+        tierKey: "tertiary",
+        eta: 7,
+        km: 3,
+        vials: 22,
         icu: true,
       },
       patientAge: "34",
@@ -431,6 +453,7 @@ export function EmergencyProvider({ children }) {
       setLastRoute,
       dismissResume,
       // Setters
+      patch, // bulk merge — used by Demo to load a full scenario at once
       setLanguage,
       startEmergency,
       setVictimLocation,
@@ -455,6 +478,7 @@ export function EmergencyProvider({ children }) {
       resumeAvailable,
       setLastRoute,
       dismissResume,
+      patch,
       setLanguage,
       startEmergency,
       setVictimLocation,
