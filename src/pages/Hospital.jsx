@@ -2,12 +2,13 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Hospital as HospitalIcon, Timer, Clock, Activity, FileText,
-  ClipboardCheck, ChevronLeft, Building2,
+  ClipboardCheck, ChevronLeft, ChevronRight, Building2,
 } from "lucide-react";
 import { C, SEVERITY_TONE, SEVERITY_PALE } from "../theme.js";
 import { tFor } from "../i18n.js";
 import { useEmergency, minutesSinceBite } from "../context/EmergencyContext.jsx";
 import { composeSummary, requiredVialsFor, DEMO_RECOMMENDED } from "../lib/handover.js";
+import BackButton from "../components/BackButton.jsx";
 
 /**
  * Hospital incoming-patient view (§2.8) — ONE simulated, read-only screen.
@@ -45,6 +46,7 @@ export default function Hospital() {
     <div className="px-4 pt-4 pb-6 flex flex-col gap-4">
       {/* ── Title + read-only framing ──────────────────────────── */}
       <div className="flex items-start gap-2">
+        <BackButton />
         <HospitalIcon size={20} style={{ color: C.teal }} className="shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-extrabold leading-tight" style={{ color: C.dark }}>

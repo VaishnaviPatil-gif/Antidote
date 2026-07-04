@@ -24,16 +24,19 @@ const CACHE_KEY = "antidote:hospitals";
  * Bundled inventory in the shape the routing engine consumes (`tierKey`,
  * `updatedMin`). Values match the backend seed so live/cached/seed agree.
  */
+// Real facilities near Malla Reddy University (Maisammaguda, Hyderabad).
+// ASV (antivenom) stock reflects the team's own phone survey of these hospitals;
+// coordinates geocoded via OpenStreetMap. Pins marked (~) are approximate — the
+// name didn't geocode exactly, so verify/adjust lat,lng if a route looks off.
 export const SEED_FACILITIES = [
-  { id: "phc-marpally", name: "PHC Marpally",                  tierKey: "phc",      lat: 17.262, lng: 77.785, vials: 0,   icu: false, sector: "govt",    beds: 0,  updatedMin: 185 },
-  { id: "phc-doulta",   name: "PHC Doultabad",                 tierKey: "phc",      lat: 17.305, lng: 77.730, vials: 2,   icu: false, sector: "govt",    beds: 1,  updatedMin: 540 },
-  { id: "chc-tandur",   name: "CHC Tandur",                    tierKey: "chc",      lat: 17.245, lng: 77.575, vials: 8,   icu: false, sector: "govt",    beds: 4,  updatedMin: 41 },
-  { id: "ah-vikarabad", name: "Area Hospital Vikarabad",       tierKey: "ah",       lat: 17.337, lng: 77.905, vials: 24,  icu: false, sector: "govt",    beds: 8,  updatedMin: 12 },
-  { id: "dh-vikarabad", name: "District Hospital Vikarabad",   tierKey: "dh",       lat: 17.331, lng: 77.901, vials: 30,  icu: true,  sector: "govt",    beds: 15, updatedMin: 25 },
-  { id: "chc-parigi",   name: "CHC Parigi",                    tierKey: "chc",      lat: 17.130, lng: 77.870, vials: 0,   icu: false, sector: "govt",    beds: 3,  updatedMin: 95 },
-  { id: "gandhi",       name: "Gandhi Hospital, Secunderabad", tierKey: "tertiary", lat: 17.443, lng: 78.499, vials: 120, icu: true,  sector: "govt",    beds: 40, updatedMin: 18 },
-  { id: "nims",         name: "NIMS, Hyderabad",               tierKey: "tertiary", lat: 17.428, lng: 78.448, vials: 90,  icu: true,  sector: "govt",    beds: 35, updatedMin: 33 },
-  { id: "apollo-hyd",   name: "Apollo Hospital, Hyderabad",    tierKey: "tertiary", lat: 17.412, lng: 78.432, vials: 60,  icu: true,  sector: "private", beds: 28, updatedMin: 22 },
+  // ── Private ──
+  { id: "mrn",       name: "Malla Reddy Narayana Multispeciality", tierKey: "tertiary", lat: 17.54399, lng: 78.43338, vials: 22,  icu: true,  sector: "private", beds: 30, updatedMin: 20 },
+  { id: "slg",       name: "SLG Hospitals, Bachupally",            tierKey: "tertiary", lat: 17.52817, lng: 78.36259, vials: 16,  icu: true,  sector: "private", beds: 24, updatedMin: 35 },
+  { id: "reach",     name: "Reach Super Speciality Hospital",      tierKey: "tertiary", lat: 17.54900, lng: 78.48700, vials: 12,  icu: true,  sector: "private", beds: 18, updatedMin: 48 }, // (~)
+  // ── Government ──
+  { id: "arundathi", name: "Arundathi Hospital",                   tierKey: "ah",       lat: 17.52300, lng: 78.46200, vials: 8,   icu: false, sector: "govt",    beds: 8,  updatedMin: 60 }, // (~)
+  { id: "basti",     name: "Basti Dawakhana (Dulapally)",          tierKey: "phc",      lat: 17.51288, lng: 78.44052, vials: 0,   icu: false, sector: "govt",    beds: 0,  updatedMin: 90 },
+  { id: "gandhi",    name: "Gandhi Hospital, Secunderabad",        tierKey: "tertiary", lat: 17.42312, lng: 78.50345, vials: 120, icu: true,  sector: "govt",    beds: 40, updatedMin: 15 },
 ];
 
 /** Map a backend record → routing facility shape, computing `updatedMin`. */
@@ -148,10 +151,10 @@ export const MOCK_INCOMING_CASES = [
     severity: "severe",
     species: "Indian Cobra",
     confidence: 0.95,
-    gps: "17.305, 77.730",
+    gps: "17.523, 78.462",
     eta: 30,
-    assignedHospitalId: "dh-vikarabad",
-    assignedHospitalName: "District Hospital Vikarabad",
+    assignedHospitalId: "gandhi",
+    assignedHospitalName: "Gandhi Hospital, Secunderabad",
     status: "enroute"
   },
   {
@@ -159,10 +162,10 @@ export const MOCK_INCOMING_CASES = [
     severity: "moderate",
     species: "Russell's Viper",
     confidence: 0.91,
-    gps: "17.130, 77.870",
+    gps: "17.544, 78.433",
     eta: 20,
-    assignedHospitalId: "ah-vikarabad",
-    assignedHospitalName: "Area Hospital Vikarabad",
+    assignedHospitalId: "mrn",
+    assignedHospitalName: "Malla Reddy Narayana Multispeciality",
     status: "preparing"
   },
   {
@@ -170,10 +173,10 @@ export const MOCK_INCOMING_CASES = [
     severity: "mild",
     species: "Common Sand Boa",
     confidence: 0.78,
-    gps: "17.245, 77.575",
+    gps: "17.528, 78.363",
     eta: 15,
-    assignedHospitalId: "chc-tandur",
-    assignedHospitalName: "CHC Tandur",
+    assignedHospitalId: "slg",
+    assignedHospitalName: "SLG Hospitals, Bachupally",
     status: "arrived"
   }
 ];

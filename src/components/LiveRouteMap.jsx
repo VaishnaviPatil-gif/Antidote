@@ -72,7 +72,7 @@ function MapEvents({ onUserPan, setBusy }) {
   return null;
 }
 
-function LiveRouteMap({ victim, recommended, language }) {
+function LiveRouteMap({ victim, recommended, language, onMetrics }) {
   const t = tFor(language);
   const nt = t.navigation;
 
@@ -193,6 +193,37 @@ function LiveRouteMap({ victim, recommended, language }) {
     }
   }, [map, route]);
 
+  // Live remaining distance + ETA. For a real OSRM route we measure how much
+  // road is left by snapping the current position onto the route geometry and
+  // summing to the end — accurate and updated on every fix, not just on the
+  // 80 m route recalcs. ETA is that remaining fraction of OSRM's drive time.
+  // Without a real route (offline fallback) we fall back to a straight-line
+  // estimate so the numbers are still honest. Computed BEFORE the early return
+  // below so hook order stays stable across the denied/allowed states.
+  const showRouteDistance = useMemo(() => {
+    if (route && !route.straight) {
+      const rem = remainingAlongRouteKm(route.coords, user);
+      if (rem != null) return rem;
+    }
+    if (user && dest) return haversineKm(user, dest);
+    return route ? route.distanceKm : null;
+  }, [route, user, dest]);
+
+  const showRouteEta = useMemo(() => {
+    if (route && !route.straight && route.distanceKm > 0 && showRouteDistance != null) {
+      return Math.max(1, Math.round(route.durationMin * (showRouteDistance / route.distanceKm)));
+    }
+    return showRouteDistance != null ? etaMin(showRouteDistance) : null;
+  }, [route, showRouteDistance]);
+
+  // Report the live road distance/ETA up so the recommended-hospital summary
+  // card shows the SAME numbers as the map (not a separate straight-line guess).
+  useEffect(() => {
+    if (onMetrics && showRouteDistance != null) {
+      onMetrics({ km: showRouteDistance, min: showRouteEta });
+    }
+  }, [onMetrics, showRouteDistance, showRouteEta]);
+
   const initialCenter = user || dest || DEFAULT_CENTER;
 
   // ── Permission denied → friendly fallback, never the map (never crashes) ──
@@ -232,28 +263,6 @@ function LiveRouteMap({ victim, recommended, language }) {
       </div>
     );
   }
-
-  // Live remaining distance + ETA. For a real OSRM route we measure how much
-  // road is left by snapping the current position onto the route geometry and
-  // summing to the end — accurate and updated on every fix, not just on the
-  // 80 m route recalcs. ETA is that remaining fraction of OSRM's drive time.
-  // Without a real route (offline fallback) we fall back to a straight-line
-  // estimate so the numbers are still honest.
-  const showRouteDistance = useMemo(() => {
-    if (route && !route.straight) {
-      const rem = remainingAlongRouteKm(route.coords, user);
-      if (rem != null) return rem;
-    }
-    if (user && dest) return haversineKm(user, dest);
-    return route ? route.distanceKm : null;
-  }, [route, user, dest]);
-
-  const showRouteEta = useMemo(() => {
-    if (route && !route.straight && route.distanceKm > 0 && showRouteDistance != null) {
-      return Math.max(1, Math.round(route.durationMin * (showRouteDistance / route.distanceKm)));
-    }
-    return showRouteDistance != null ? etaMin(showRouteDistance) : null;
-  }, [route, showRouteDistance]);
 
   return (
     <div

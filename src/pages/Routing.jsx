@@ -5,9 +5,11 @@ import {
   Crosshair, Building2, Siren, Timer, RadioTower,
 } from "lucide-react";
 import { useEmergency } from "../context/EmergencyContext.jsx";
+import BackButton from "../components/BackButton.jsx";
 import NavigationOverlay from "../components/NavigationOverlay.jsx";
 import ClinicianHandover from "../components/ClinicianHandover.jsx";
 import { SEED_FACILITIES, fetchHospitals, getPredictedRemainingVials, getCapacityRating } from "../lib/hospitals.js";
+import { formatDistance, formatDuration } from "../lib/geo.js";
 
 // The interactive Leaflet map is lazy-loaded so the (heavy) mapping bundle only
 // downloads when the Routing screen is actually shown — keeping the rest of the
@@ -126,7 +128,8 @@ const T = {
 
 // ── Victim + seeded facility inventory (real coords → real distances) ──────
 // Fallback victim location, used only when context has no victimLocation yet.
-const VICTIM = { lat: 17.270, lng: 77.770 };
+// Malla Reddy University (Maisammaguda, Hyderabad) — the demo's home turf.
+const VICTIM = { lat: 17.56229, lng: 78.4538 };
 
 // Facility inventory now comes from the live backend feed (src/lib/hospitals.js)
 // with a graceful cached→seed fallback. SEED_FACILITIES is the offline default.
@@ -166,9 +169,13 @@ export default function AntidotePlusRouting() {
     biteTime,
     severity,
     setSeverity,
+    recommendedHospital,
     setRecommendedHospital,
   } = useEmergency();
   const [phase, setPhase] = useState("triage"); // triage | confirming | confirmed | navigating
+  // Live road distance/ETA reported by the map, so the summary card shows the
+  // SAME numbers as the map instead of a separate straight-line estimate.
+  const [liveMetrics, setLiveMetrics] = useState(null);
   const t = T[lang];
 
   // ── Live antivenom-stock feed ─────────────────────────────────────────────
@@ -308,6 +315,7 @@ export default function AntidotePlusRouting() {
         <header style={{ background: C.teal }} className="px-4 pt-4 pb-3 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
+              <BackButton tone="onTeal" />
               <div
                 className="flex items-center justify-center rounded-xl"
                 style={{ background: "rgba(255,255,255,.14)", width: 36, height: 36 }}
@@ -345,7 +353,7 @@ export default function AntidotePlusRouting() {
             <Crosshair size={16} style={{ color: C.orange }} className="shrink-0" />
             <div className="min-w-0">
               <div className="text-xs" style={{ color: "#9FBFBD" }}>{t.victim}</div>
-              <div className="text-sm font-semibold truncate">{victimLabel || "Marpally, Vikarabad"}</div>
+              <div className="text-sm font-semibold truncate">{victimLabel || "Malla Reddy University, Hyderabad"}</div>
             </div>
           </div>
           <div className="flex items-center gap-1.5 rounded-lg px-2.5 py-1" style={{ background: "rgba(192,57,43,.22)" }}>
@@ -388,7 +396,7 @@ export default function AntidotePlusRouting() {
         {/* ── Map (real interactive Leaflet navigation map) ──────── */}
         <div className="px-4 pt-3">
           <Suspense fallback={<MapSkeleton />}>
-            <LiveRouteMap victim={victim} recommended={recommended} language={lang} />
+            <LiveRouteMap victim={victim} recommended={recommended} language={lang} onMetrics={setLiveMetrics} />
           </Suspense>
         </div>
 
@@ -465,8 +473,8 @@ export default function AntidotePlusRouting() {
 
                 {/* Big stats row */}
                 <div className="grid grid-cols-3 gap-2 mt-3">
-                  <Stat icon={<MapPin size={15} />} value={`${recommended.km.toFixed(0)} km`} label={t.away} color={C.teal} />
-                  <Stat icon={<Timer size={15} />} value={`${recommended.eta} min`} label={t.eta} color={C.teal} />
+                  <Stat icon={<MapPin size={15} />} value={liveMetrics ? formatDistance(liveMetrics.km) : `${recommended.km.toFixed(0)} km`} label={t.away} color={C.teal} />
+                  <Stat icon={<Timer size={15} />} value={liveMetrics ? formatDuration(liveMetrics.min) : `${recommended.eta} min`} label={t.eta} color={C.teal} />
                   <Stat
                     icon={<Droplets size={15} />}
                     value={`${recommended.vials}`}
@@ -604,6 +612,26 @@ export default function AntidotePlusRouting() {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Empty state — no facility currently has usable antivenom stock.
+              Renders instead of a blank decision area so the screen never looks
+              broken while the live feed loads or when every facility is out. */}
+          {!recommended && (
+            <div
+              className="rounded-2xl border border-dashed px-4 py-6 text-center"
+              style={{ borderColor: "#C5DBD9", background: "#fff" }}
+            >
+              <div className="flex justify-center mb-2" style={{ color: C.muted }}>
+                <Building2 size={26} />
+              </div>
+              <div className="text-sm font-bold" style={{ color: C.dark }}>
+                {t.noneMatch}
+              </div>
+              <div className="text-xs mt-1 leading-snug" style={{ color: C.muted }}>
+                {t.trust}
               </div>
             </div>
           )}
