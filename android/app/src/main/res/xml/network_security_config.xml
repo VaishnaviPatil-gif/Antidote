@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Antidote+ Android network policy.
+
+  Capacitor serves the app itself over http://localhost, so that origin must stay
+  cleartext-allowed. The AI backend (Gemini proxy) runs over plain HTTP during
+  local/emulator testing, so we also allow cleartext to the emulator's host
+  loopback alias (10.0.2.2) and common LAN ranges. Production should use an
+  https:// backend, at which point these cleartext exceptions are unnecessary.
+-->
+<network-security-config>
+    <!--
+      base-config permits cleartext (http://) to ANY host during development so
+      the AI backend also works UNTETHERED: set VITE_API_BASE to the PC's LAN IP
+      (e.g. http://192.168.1.20:8000) with the phone on the same Wi-Fi — no
+      per-IP entry needed (Android can't wildcard IP ranges in domain-config).
+
+      SECURITY: local/demo builds only. In production point VITE_API_BASE at an
+      https:// backend and delete this base-config so plain HTTP is blocked.
+    -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

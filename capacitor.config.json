@@ -1,5 +1,11 @@
 {
   "appId": "com.nxyen.antidote",
   "appName": "Antidote+",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
 }
