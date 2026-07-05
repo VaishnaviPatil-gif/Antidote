@@ -45,17 +45,16 @@ def _ago(minutes: int) -> str:
 # Mirrors src/lib/hospitals.js SEED_FACILITIES so the client's offline fallback
 # and this live feed agree. Coordinates are real; `vials` is the seeded stock.
 def _seed() -> dict[str, dict]:
+    # Real facilities near Malla Reddy University (Hyderabad). ASV stock reflects
+    # the team's phone survey; mirrors src/lib/hospitals.js SEED_FACILITIES.
     rows = [
-        # id,            name,                              tier,       lat,     lng,     vials, icu,   sector,   beds, updated_min
-        ("phc-marpally",  "PHC Marpally",                    "phc",      17.262, 77.785,  0,   False, "govt",    0,   185),
-        ("phc-doulta",    "PHC Doultabad",                   "phc",      17.305, 77.730,  2,   False, "govt",    1,   540),
-        ("chc-tandur",    "CHC Tandur",                      "chc",      17.245, 77.575,  8,   False, "govt",    4,   41),
-        ("ah-vikarabad",  "Area Hospital Vikarabad",         "ah",       17.337, 77.905,  24,  False, "govt",    8,   12),
-        ("dh-vikarabad",  "District Hospital Vikarabad",     "dh",       17.331, 77.901,  30,  True,  "govt",    15,  25),
-        ("chc-parigi",    "CHC Parigi",                      "chc",      17.130, 77.870,  0,   False, "govt",    3,   95),
-        ("gandhi",        "Gandhi Hospital, Secunderabad",   "tertiary", 17.443, 78.499,  120, True,  "govt",    40,  18),
-        ("nims",          "NIMS, Hyderabad",                 "tertiary", 17.428, 78.448,  90,  True,  "govt",    35,  33),
-        ("apollo-hyd",    "Apollo Hospital, Hyderabad",      "tertiary", 17.412, 78.432,  60,  True,  "private", 28,  22),
+        # id,          name,                                        tier,       lat,      lng,      vials, icu,   sector,   beds, updated_min
+        ("mrn",        "Malla Reddy Narayana Multispeciality",      "tertiary", 17.54399, 78.43338, 22,  True,  "private", 30,  20),
+        ("slg",        "SLG Hospitals, Bachupally",                 "tertiary", 17.52817, 78.36259, 16,  True,  "private", 24,  35),
+        ("reach",      "Reach Super Speciality Hospital",           "tertiary", 17.549,   78.487,   12,  True,  "private", 18,  48),
+        ("arundathi",  "Arundathi Hospital",                        "ah",       17.523,   78.462,   8,   False, "govt",    8,   60),
+        ("basti",      "Basti Dawakhana (Dulapally)",               "phc",      17.51288, 78.44052, 0,   False, "govt",    0,   90),
+        ("gandhi",     "Gandhi Hospital, Secunderabad",             "tertiary", 17.42312, 78.50345, 120, True,  "govt",    40,  15),
     ]
     return {
         r[0]: {
@@ -132,3 +131,23 @@ def update_stock(hospital_id: str, vials: int, beds: int | None = None) -> dict 
         rec["updated_at"] = _now().isoformat()
         _persist()
         return dict(rec)
+
+
+def add_hospital(hospital_id: str, data: dict) -> dict:
+    """Register a new hospital with the specified credentials and details."""
+    with _lock:
+        store = _load()
+        store[hospital_id] = {
+            "id": hospital_id,
+            "name": data["name"],
+            "tier": data.get("tier", "tertiary"),
+            "lat": float(data["lat"]),
+            "lng": float(data["lng"]),
+            "vials": int(data.get("vials", 0)),
+            "icu": bool(data.get("icu", True)),
+            "sector": data.get("sector", "private"),
+            "beds": int(data.get("beds", 0)),
+            "updated_at": _now().isoformat(),
+        }
+        _persist()
+        return dict(store[hospital_id])

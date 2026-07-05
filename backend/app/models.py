@@ -112,3 +112,45 @@ class SeverityResponse(BaseModel):
     reasoning: list[str] = Field(default_factory=list)
     disclaimer: str
     source: str = Field(..., description='"gemini" or "fallback"')
+
+
+# ── /api/voice-chat ────────────────────────────────────────────────────────
+class VoiceChatResponse(BaseModel):
+    """Full voice-chat loop response: transcript + AI reply + audio."""
+
+    transcript: str = Field(..., description="What the user said (STT output).")
+    language: str = Field(..., description="Detected language code (e.g. te-IN).")
+    ai_response: str = Field(..., description="Gemini's first-aid reply text.")
+    audio_base64: str = Field(..., description="Base64-encoded MP3 of the spoken reply.")
+    action: str = Field(
+        default="none",
+        description=(
+            "In-app action the user asked for, so the frontend can navigate/act. "
+            "One of: route_hospital, sos, identify_snake, track_symptoms, "
+            "first_aid, none."
+        ),
+    )
+
+
+# ── /api/tts ───────────────────────────────────────────────────────────────
+class TtsRequest(BaseModel):
+    """Text-to-speech request."""
+
+    text: str = Field(..., description="Text to convert to speech.")
+    language: str = Field(default="te-IN", description="BCP-47 language code.")
+    speaker: str = Field(default="priya", description="Sarvam bulbul:v3 voice name.")
+    pace: float = Field(default=1.0, ge=0.5, le=2.0, description="Speech pace.")
+
+
+class TtsResponse(BaseModel):
+    """Base64 audio returned from TTS."""
+
+    audio_base64: str = Field(..., description="Base64-encoded MP3 audio.")
+
+
+# ── /api/stt ───────────────────────────────────────────────────────────────
+class SttResponse(BaseModel):
+    """Speech-to-text response."""
+
+    transcript: str = Field(..., description="Transcribed text.")
+    language: str = Field(..., description="Detected language code.")

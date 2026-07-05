@@ -1,0 +1,37 @@
+{
+  "mrn": {
+    "password": "mrn123",
+    "hospital_id": "mrn",
+    "name": "Malla Reddy Narayana"
+  },
+  "gandhi": {
+    "password": "gandhi123",
+    "hospital_id": "gandhi",
+    "name": "Gandhi Hospital"
+  },
+  "slg": {
+    "password": "slg123",
+    "hospital_id": "slg",
+    "name": "SLG Hospitals"
+  },
+  "reach": {
+    "password": "reach123",
+    "hospital_id": "reach",
+    "name": "Reach Super Speciality"
+  },
+  "arundathi": {
+    "password": "arun123",
+    "hospital_id": "arundathi",
+    "name": "Arundathi Hospital"
+  },
+  "basti": {
+    "password": "basti123",
+    "hospital_id": "basti",
+    "name": "Basti Dawakhana"
+  },
+  "admin": {
+    "password": "admin123",
+    "hospital_id": null,
+    "name": "District Health Office"
+  }
+}

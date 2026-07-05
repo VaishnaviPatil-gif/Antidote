@@ -619,3 +619,271 @@ def evaluate_severity(symptoms: dict, snake: dict | None, mins_since_bite: int, 
     except Exception:  # noqa: BLE001
         logger.exception("evaluate_severity failed; returning fallback")
         return fallback
+
+
+# ── Voice chat (Sarvam TTS/STT + Gemini brain) ──────────────────────────────
+
+# The in-app actions the assistant can trigger. The frontend maps each to a
+# screen (route_hospital → /routing, sos → /sos, etc.). "none" = just talk.
+VOICE_ACTIONS = {
+    "route_hospital",   # take me to / book / reach a hospital with antivenom
+    "hospital_stock",   # QUESTION: how many vials / which hospital has antivenom
+    "sos",              # call for help / ambulance / send SOS
+    "identify_snake",   # identify the snake / open the camera
+    "track_symptoms",   # log or check symptoms over time
+    "first_aid",        # what do I do right now (advice, no navigation)
+    "none",             # general talk / reassurance / unclear
+}
+
+# Keyword fallback intent detection, used when Gemini is down or over its daily
+# quota (the free tier is only ~20 requests/day, so this path runs often during a
+# demo). Order matters: the most decisive intents are checked first. English +
+# native + transliterated Hindi/Telugu cues so a spoken command still routes with
+# NO Gemini call at all. Both साँप (nuqta) and सांप (anusvara) spellings included.
+_ACTION_KEYWORDS = [
+    # Stock QUESTIONS first — "how many vials at the nearest hospital" mentions
+    # "hospital" too, so it must beat route_hospital to the match.
+    ("hospital_stock", ("how many", "vial", "antivenom", "anti-venom", "asv",
+                        "in stock", "available", "kitne", "కెన్ని", "ఎన్ని",
+                        "సీసా", "శీశి", "कितनी", "शीशी", "स्टॉक", "stock")),
+    ("sos", ("ambulance", "call help", "call for help", "emergency call", "108",
+             "112", "madad", "bulao", "sahayam", "సహాయం", "పిలవండి", "मदद", "बुलाओ")),
+    ("route_hospital", ("hospital", "book", "take me", "directions", "route",
+                        "nearest", "reach", "go to", "asupatri", "aspatal",
+                        "ఆసుపత్రి", "తీసుకెళ్", "अस्पताल", "ले चलो", "ले जाओ")),
+    ("identify_snake", ("identify", "which snake", "what snake", "photo", "camera",
+                        "picture", "pehchan", "pamu", "పాము", "గుర్తించు",
+                        "saanp", "साँप", "सांप", "पहचान")),
+    ("track_symptoms", ("symptom", "swelling", "feeling", "track", "vomit",
+                        "lakshan", "లక్షణ", "వాపు", "लक्षण", "सूजन")),
+    ("first_aid", ("first aid", "what do i do", "what should", "help me",
+                   "bandage", "tourniquet", "pratham", "prathamik",
+                   "ప్రథమ", "प्राथमिक")),
+]
+
+
+def _keyword_action(text: str) -> str:
+    """Best-effort intent from raw text — the offline / no-quota fallback."""
+    low = (text or "").lower()
+    for action, cues in _ACTION_KEYWORDS:
+        if any(cue in low for cue in cues):
+            return action
+    return "none"
+
+
+# Per-action spoken fallback replies (te/hi/en), used when Gemini is unavailable.
+# Each CONFIRMS the action so the spoken reply matches the screen we navigate to,
+# keeping the assistant coherent even with zero Gemini calls.
+_ACTION_REPLY = {
+    "route_hospital": {
+        "te": "సరే, యాంటివీనమ్ ఉన్న సమీప ఆసుపత్రికి మిమ్మల్ని తీసుకెళ్తున్నాను. ప్రశాంతంగా ఉండండి.",
+        "hi": "ठीक है, मैं आपको एंटीवेनम वाले नज़दीकी अस्पताल ले जा रहा हूँ। शांत रहें।",
+        "en": "Okay, taking you to the nearest hospital that has antivenom. Stay calm.",
+    },
+    "sos": {
+        "te": "సహాయం కోసం SOS తెరుస్తున్నాను. మీ అత్యవసర పరిచయాలకు అలర్ట్ పంపవచ్చు.",
+        "hi": "मैं मदद के लिए SOS खोल रहा हूँ। आप अपने आपातकालीन संपर्कों को अलर्ट भेज सकते हैं।",
+        "en": "Opening SOS for help. You can alert your emergency contacts now.",
+    },
+    "identify_snake": {
+        "te": "పామును గుర్తించడానికి కెమెరా తెరుస్తున్నాను. పాము ఫోటో తీయండి.",
+        "hi": "साँप पहचानने के लिए कैमरा खोल रहा हूँ। साँप की फ़ोटो लें।",
+        "en": "Opening the camera to identify the snake. Take a photo of it.",
+    },
+    "track_symptoms": {
+        "te": "లక్షణాలను నమోదు చేయడానికి ట్రాకర్ తెరుస్తున్నాను.",
+        "hi": "लक्षण दर्ज करने के लिए ट्रैकर खोल रहा हूँ।",
+        "en": "Opening the symptom tracker so you can log how you feel.",
+    },
+    "first_aid": {
+        "te": "ప్రశాంతంగా ఉండండి, కాటు అవయవాన్ని కదపకండి, కోయవద్దు లేదా కట్టు కట్టవద్దు. వెంటనే ఆసుపత్రికి వెళ్ళండి.",
+        "hi": "शांत रहें, काटे हुए अंग को न हिलाएं, न काटें न बांधें। तुरंत अस्पताल जाएं।",
+        "en": "Stay calm, keep the bitten limb still, don't cut or tie it. Reach a hospital quickly.",
+    },
+    "hospital_stock": {
+        # Only used when NO live context was supplied — otherwise we answer with
+        # real numbers via _stock_answer().
+        "te": "ప్రస్తుత స్టాక్ సమాచారం కోసం, ఆసుపత్రి స్క్రీన్ తెరవండి. యాంటివీనమ్ ఉన్న సమీప ఆసుపత్రిని చూపిస్తాను.",
+        "hi": "मौजूदा स्टॉक के लिए अस्पताल स्क्रीन खोलें। मैं एंटीवेनम वाला नज़दीकी अस्पताल दिखाता हूँ।",
+        "en": "For live stock, open the hospital screen — I'll show the nearest hospital that has antivenom.",
+    },
+    "none": {
+        "te": "ప్రశాంతంగా ఉండండి. కాటు వేసిన అవయవాన్ని కదపకండి. వెంటనే సమీపంలోని ఆసుపత్రికి వెళ్ళండి.",
+        "hi": "शांत रहें। काटे हुए अंग को न हिलाएं। तुरंत नजदीकी अस्पताल जाएं।",
+        "en": "Stay calm. Don't move the bitten limb. Get to the nearest hospital with antivenom immediately.",
+    },
+}
+
+
+def _hospital_context_text(app_context: dict | None) -> str:
+    """Compact, prompt-ready summary of the live hospital feed (or "" if none)."""
+    if not app_context or not isinstance(app_context, dict):
+        return ""
+    hospitals = app_context.get("hospitals") or []
+    rec = app_context.get("recommended") or None
+    if not hospitals and not rec:
+        return ""
+
+    lines = ["LIVE HOSPITAL DATA — use ONLY these numbers for stock/distance "
+             "questions, never invent them:"]
+    if rec:
+        lines.append(
+            f"- Recommended (nearest WITH antivenom in stock): {rec.get('name')} "
+            f"— {rec.get('vials')} vials, ~{rec.get('km')} km, ~{rec.get('eta_min')} min away."
+        )
+    if hospitals:
+        parts = [
+            f"{h.get('name')} ({h.get('vials')} vials, ~{h.get('km')} km)"
+            for h in hospitals[:6]
+        ]
+        lines.append("- All nearby: " + "; ".join(parts) + ".")
+    return "\n".join(lines)
+
+
+def _stock_answer(app_context: dict | None, lang: str) -> str | None:
+    """Deterministic spoken answer to a stock question, straight from live data.
+
+    Quota-proof: needs no Gemini call. Returns None if we have no data to answer
+    with (caller then uses the generic hospital_stock fallback line).
+    """
+    if not app_context or not isinstance(app_context, dict):
+        return None
+    rec = app_context.get("recommended")
+    if not rec or rec.get("vials") is None:
+        return None
+    name, vials = rec.get("name"), rec.get("vials")
+    km, eta = rec.get("km"), rec.get("eta_min")
+    if lang == "hi":
+        return (f"एंटीवेनम वाला सबसे नज़दीकी अस्पताल {name} है, लगभग {km} किलोमीटर दूर। "
+                f"वहाँ {vials} शीशियाँ एंटीवेनम तैयार हैं, पहुँचने में करीब {eta} मिनट।")
+    if lang == "te":
+        return (f"యాంటివీనమ్ ఉన్న సమీప ఆసుపత్రి {name}, సుమారు {km} కిలోమీటర్ల దూరంలో ఉంది. "
+                f"అక్కడ {vials} సీసాల యాంటివీనమ్ సిద్ధంగా ఉంది, చేరడానికి సుమారు {eta} నిమిషాలు.")
+    return (f"The nearest hospital with antivenom is {name}, about {km} km away. "
+            f"It has {vials} vials of antivenom ready — roughly {eta} minutes to reach.")
+
+
+def _lang_key(language: str) -> str:
+    """Map a BCP-47 code (te-IN) to our reply table key (te), default en."""
+    short = (language or "en").split("-")[0].lower()
+    return short if short in ("te", "hi", "en") else "en"
+
+
+_VOICE_CHAT_PROMPT = (
+    "You are the voice assistant for Antidote+, a snakebite emergency app used in "
+    "rural India. A patient (or bystander) is speaking to you by voice during a "
+    "real emergency. Decide (a) a SHORT spoken reply and (b) which single in-app "
+    "ACTION they want.\n\n"
+    "ACTIONS (choose exactly one):\n"
+    "- route_hospital: they want to GO TO / reach / be taken to a hospital, get "
+    "directions, or \"book\" a hospital that has antivenom.\n"
+    "- hospital_stock: they only ASK about vial counts / antivenom availability / "
+    "which hospital has stock, WITHOUT asking to be taken there. Answer with the "
+    "live numbers; do NOT navigate.\n"
+    "- sos: they want to call for help, an ambulance, or send an SOS to contacts.\n"
+    "- identify_snake: they want to identify the snake or use the camera.\n"
+    "- track_symptoms: they want to log or check symptoms (swelling, breathing).\n"
+    "- first_aid: they are asking what to do right now (advice only, no screen).\n"
+    "- none: general talk, reassurance, or unclear.\n\n"
+    "REPLY RULES:\n"
+    "1. Same language the user spoke ({language}); match a mixed style if they mix.\n"
+    "2. SHORT — 2-4 sentences, it is read aloud by text-to-speech.\n"
+    "3. Calm, reassuring, safety-first. Never give dosage or medication advice.\n"
+    "4. If the action navigates (route_hospital, sos, identify_snake, "
+    "track_symptoms), the reply must CONFIRM you are opening that screen now "
+    "(e.g. \"Okay, taking you to the nearest hospital that has antivenom.\").\n"
+    "5. If breathing difficulty, vision problems or heavy bleeding are mentioned, "
+    "urge them to reach emergency care immediately.\n"
+    "6. For hospital_stock questions, ANSWER using the live hospital data below "
+    "(vial counts, distances). Never invent numbers; if none is given, tell them "
+    "to open the hospital screen.\n\n"
+    "{hospital_data}"
+    "Conversation so far:\n{history}\n\n"
+    "Patient just said: \"{user_text}\"\n\n"
+    "Return ONLY minified JSON, no text outside it: "
+    '{{"reply":"<spoken reply in {language}>","action":"<one action>"}}'
+)
+
+
+def voice_chat_respond(
+    user_text: str,
+    language: str = "te-IN",
+    conversation_history: list[dict] | None = None,
+    app_context: dict | None = None,
+) -> dict:
+    """Generate a voice-assistant reply AND the in-app action, in one call.
+
+    Returns {"reply": <text to speak>, "action": <one of VOICE_ACTIONS>}. Never
+    raises: on any failure it falls back to a safe sentence plus a keyword-based
+    action so the assistant still navigates offline.
+    """
+    # Map language codes to human-readable names for the prompt
+    lang_names = {
+        "te-IN": "Telugu", "te": "Telugu",
+        "hi-IN": "Hindi", "hi": "Hindi",
+        "en-IN": "English", "en": "English",
+        "kn-IN": "Kannada", "kn": "Kannada",
+        "ta-IN": "Tamil", "ta": "Tamil",
+        "ml-IN": "Malayalam", "ml": "Malayalam",
+        "mr-IN": "Marathi", "mr": "Marathi",
+        "bn-IN": "Bengali", "bn": "Bengali",
+        "gu-IN": "Gujarati", "gu": "Gujarati",
+    }
+    lang_name = lang_names.get(language, "the same language as the patient")
+
+    # Format conversation history
+    history_str = ""
+    if conversation_history:
+        for entry in conversation_history[-6:]:  # Last 6 turns max
+            role = entry.get("role", "user")
+            text = entry.get("text", "")
+            history_str += f"{'Patient' if role == 'user' else 'Assistant'}: {text}\n"
+    if not history_str:
+        history_str = "(This is the start of the conversation.)"
+
+    # Build a fallback that CONFIRMS the keyword-detected action, in the user's
+    # language — so even with no Gemini call, the spoken reply matches the screen
+    # we navigate to. This is the common path once the daily Gemini quota is hit.
+    fb_action = _keyword_action(user_text)
+    fb_key = _lang_key(language)
+    if fb_action == "hospital_stock":
+        # Answer stock questions straight from live data — no Gemini needed.
+        answer = _stock_answer(app_context, fb_key)
+        fb_reply = answer if answer else _ACTION_REPLY["hospital_stock"][fb_key]
+    else:
+        fb_reply = _ACTION_REPLY[fb_action][fb_key]
+    fallback = {"reply": fb_reply, "action": fb_action}
+
+    genai = _genai()
+    if genai is None:
+        logger.info("voice_chat_respond: no Gemini; returning keyword fallback")
+        return fallback
+
+    hospital_data = _hospital_context_text(app_context)
+    try:
+        model = genai.GenerativeModel(settings.gemini_model)
+        prompt = _VOICE_CHAT_PROMPT.format(
+            language=lang_name,
+            history=history_str,
+            user_text=user_text,
+            hospital_data=(hospital_data + "\n\n") if hospital_data else "",
+        )
+        resp = model.generate_content(prompt)
+        text = (getattr(resp, "text", "") or "").strip()
+        if not text:
+            return fallback
+
+        parsed = _extract_json(text)
+        reply = str(parsed.get("reply") or "").strip()
+        action = str(parsed.get("action") or "").strip().lower()
+        if action not in VOICE_ACTIONS:
+            action = _keyword_action(user_text)
+        if not reply:
+            # Model spoke but gave no JSON reply — use its raw text, keep action.
+            reply = text if "{" not in text else fallback["reply"]
+
+        logger.info("voice_chat_respond: action=%s reply=%s", action, reply[:200])
+        return {"reply": reply, "action": action}
+    except Exception:  # noqa: BLE001
+        logger.exception("voice_chat_respond failed; returning fallback")
+        return fallback

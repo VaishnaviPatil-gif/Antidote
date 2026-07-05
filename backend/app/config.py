@@ -21,15 +21,29 @@ class Settings(BaseSettings):
     # Secret — server-side only. Empty => run in safe-fallback mode (no Gemini).
     gemini_api_key: str | None = None
 
-    # Gemini model used for both vision and text.
-    gemini_model: str = "gemini-2.5-flash"
+    # Sarvam AI key — server-side only. Empty => TTS/STT disabled (voice chat
+    # won't work, but the rest of the app is unaffected).
+    sarvam_api_key: str | None = None
+
+    # Default Sarvam TTS voice. MUST be a bulbul:v3 speaker (priya, neha, pooja,
+    # kavya, shreya, …). v2 voices like "anushka"/"meera" 400 on bulbul:v3.
+    sarvam_speaker: str = "priya"
+
+    # Gemini model used for both vision and text. flash-lite has a SEPARATE daily
+    # free-tier quota bucket from flash, so switching here restores the AI brain
+    # once flash is exhausted (the free tier is only ~20 requests/day/model).
+    gemini_model: str = "gemini-2.5-flash-lite"
 
     # CORS origins (comma-separated). Defaults cover the Vite dev server AND the
     # Capacitor Android WebView origins (https://localhost, capacitor://localhost)
     # so AI calls work in the packaged APK, not only in the browser.
     allowed_origins: str = (
-        "http://localhost:5173,https://localhost,capacitor://localhost"
+        "http://localhost:5173,https://localhost,capacitor://localhost,"
+        "http://localhost:5174,http://127.0.0.1:5174"
     )
+
+    # Secret used to sign hospital-dashboard auth tokens. Override in prod.
+    auth_secret: str = "antidote-dev-secret-change-me"
 
     # Logging level.
     log_level: str = "INFO"
@@ -48,6 +62,11 @@ class Settings(BaseSettings):
     def gemini_enabled(self) -> bool:
         """True when a key is configured (the proxy can call Gemini)."""
         return bool(self.gemini_api_key)
+
+    @property
+    def sarvam_enabled(self) -> bool:
+        """True when a Sarvam key is configured (voice chat available)."""
+        return bool(self.sarvam_api_key)
 
 
 @lru_cache

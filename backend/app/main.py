@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import __version__
 from .config import settings
 from .logging_config import configure_logging
-from .routes import health, hospitals, identify, summarize, severity
+from .routes import health, hospitals, identify, summarize, severity, auth, cases, voice_chat, test_sarvam
 
 configure_logging(settings.log_level)
 logger = logging.getLogger("antidote")
@@ -44,13 +44,18 @@ app.include_router(identify.router, prefix="/api")
 app.include_router(summarize.router, prefix="/api")
 app.include_router(hospitals.router, prefix="/api")
 app.include_router(severity.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
+app.include_router(cases.router, prefix="/api")
+app.include_router(voice_chat.router, prefix="/api")
+app.include_router(test_sarvam.router, prefix="/api")
 
 
 @app.on_event("startup")
 def _startup() -> None:
     logger.info(
-        "Antidote+ API v%s started (gemini=%s, origins=%s)",
+        "Antidote+ API v%s started (gemini=%s, sarvam=%s, origins=%s)",
         __version__,
         settings.gemini_enabled,
+        settings.sarvam_enabled,
         ",".join(settings.origins),
     )
