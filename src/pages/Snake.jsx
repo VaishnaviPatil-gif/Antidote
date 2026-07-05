@@ -1,8 +1,8 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Camera, Loader2, AlertTriangle, ShieldAlert, X, RefreshCw,
-  ChevronRight, SkipForward, Info,
+  ChevronRight, SkipForward, Info, MapPin,
 } from "lucide-react";
 import { C, FRAME_BG } from "../theme.js";
 
@@ -12,7 +12,30 @@ import { tFor } from "../i18n.js";
 import { useEmergency } from "../context/EmergencyContext.jsx";
 import { identifySnake } from "../lib/api.js";
 import { compressImageFile, readFileAsDataUrl } from "../lib/image.js";
+import { snakesForLocation } from "../data/regionalSnakes.js";
 import BackButton from "../components/BackButton.jsx";
+
+// Trilingual copy for the offline "likely snakes in your area" card.
+const REGIONAL_STR = {
+  en: {
+    title: "Likely snakes in your area",
+    offline: "Offline — from local records",
+    online: "From local records",
+    safety: "If unsure, ASSUME venomous and reach a hospital with antivenom immediately.",
+  },
+  hi: {
+    title: "आपके क्षेत्र के संभावित साँप",
+    offline: "ऑफ़लाइन — स्थानीय रिकॉर्ड से",
+    online: "स्थानीय रिकॉर्ड से",
+    safety: "संदेह हो तो साँप को विषैला मानें और तुरंत एंटीवेनम वाले अस्पताल पहुँचें।",
+  },
+  te: {
+    title: "మీ ప్రాంతంలో సాధారణ పాములు",
+    offline: "ఆఫ్‌లైన్ — స్థానిక రికార్డుల నుండి",
+    online: "స్థానిక రికార్డుల నుండి",
+    safety: "అనుమానం ఉంటే విషపూరితంగా భావించి, వెంటనే యాంటివీనమ్ ఉన్న ఆసుపత్రికి వెళ్లండి.",
+  },
+};
 
 /**
  * Snake capture (§2.3) — OPTIONAL, never blocks the emergency flow.
@@ -30,9 +53,13 @@ const LOW_CONFIDENCE = 0.6;
 
 export default function Snake() {
   const navigate = useNavigate();
-  const { language, snake, snakeImage, setSnake, setSnakeImage } = useEmergency();
+  const { language, snake, snakeImage, setSnake, setSnakeImage, victimLocation } = useEmergency();
   const t = tFor(language);
   const fileRef = useRef(null);
+
+  // Offline fallback: snakes recorded in the victim's district (nearest match).
+  const lang = REGIONAL_STR[language] ? language : "en";
+  const area = useMemo(() => snakesForLocation(victimLocation), [victimLocation]);
 
   // All UI state — the image preview can rehydrate from context
   const [status, setStatus] = useState(() => (snake ? "result" : "idle")); // idle | analyzing | result
@@ -405,6 +432,63 @@ export default function Snake() {
             <div className="text-[11px] leading-relaxed" style={{ color: C.muted }}>
               {t.snake.disclaimerBody}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Offline / low-confidence: likely snakes in this district ──
+          When the AI can't positively ID (no network, or below threshold), we
+          still help by listing species RECORDED in the victim's area so they can
+          compare — venomous flags first. Data is local (bundled), so it works
+          fully offline. */}
+      {status === "result" && (failed || !isConfident) && (
+        <div className="rounded-2xl border bg-white p-4 flex flex-col gap-3 shadow-sm ap-fade-up" style={{ borderColor: "#C5DBD9" }}>
+          <div className="flex items-center gap-2">
+            <div className="rounded-lg p-2 shrink-0" style={{ background: C.tealPale }}>
+              <MapPin size={18} style={{ color: C.teal }} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold uppercase tracking-wider" style={{ color: C.teal }}>
+                {REGIONAL_STR[lang].title}
+              </div>
+              <div className="text-[10px] leading-tight" style={{ color: C.muted }}>
+                {(failed ? REGIONAL_STR[lang].offline : REGIONAL_STR[lang].online)} • {area.district}, {area.state}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {area.snakes.map((s) => (
+              <div
+                key={s.name}
+                className="flex items-center gap-2 rounded-xl border px-3 py-2"
+                style={{ borderColor: "#E1EAE9", background: FRAME_BG }}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold leading-tight truncate" style={{ color: C.dark }}>
+                    {s.name}
+                  </div>
+                  <div className="text-[11px] italic truncate" style={{ color: C.tealDark }}>
+                    {s.sci}
+                  </div>
+                </div>
+                <span
+                  className="text-[10px] font-extrabold rounded-full px-2 py-0.5 shrink-0 flex items-center gap-1"
+                  style={{
+                    background: s.venomous ? C.dangerPale : C.goodPale,
+                    color: s.venomous ? C.danger : C.good,
+                    border: `1px solid ${s.venomous ? "#F0CFC9" : "#CBE7DB"}`,
+                  }}
+                >
+                  <AlertTriangle size={10} />
+                  {s.venomous ? t.snake.venomousBadge : t.snake.nonVenomousBadge}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-[11px] leading-relaxed rounded-lg px-3 py-2" style={{ background: C.tealPale, color: C.tealDark }}>
+            {REGIONAL_STR[lang].safety}
           </div>
         </div>
       )}

@@ -6,13 +6,13 @@ import { useEmergency } from "../context/EmergencyContext.jsx";
 import { idbSet } from "../lib/db.js";
 import { SEED_FACILITIES } from "../lib/hospitals.js";
 
-// Predefined route steps for GPS simulation (Marpally to Vikarabad)
+// Predefined route steps for GPS simulation (Jeedimetla → Malla Reddy Narayana)
 const SIMULATED_GPS_STEPS = [
-  { lat: 17.6186, lng: 77.8188, label: "Marpally Region (Bite Location)" },
-  { lat: 17.5500, lng: 77.8350, label: "State Highway 4 (En Route)" },
-  { lat: 17.4800, lng: 77.8600, label: "Mampalli Crossroads (Passing)" },
-  { lat: 17.4000, lng: 77.8850, label: "Vikarabad Bypass (Nearing)" },
-  { lat: 17.3310, lng: 77.9010, label: "District Hospital Vikarabad (Arrived)" }
+  { lat: 17.5105, lng: 78.4420, label: "Jeedimetla (Bite Location)" },
+  { lat: 17.5200, lng: 78.4400, label: "Suraram Road (En Route)" },
+  { lat: 17.5300, lng: 78.4370, label: "Jeedimetla X Roads (Passing)" },
+  { lat: 17.5390, lng: 78.4350, label: "Suraram (Nearing)" },
+  { lat: 17.5440, lng: 78.4334, label: "Malla Reddy Narayana (Arrived)" }
 ];
 
 export default function Demo() {
@@ -90,8 +90,8 @@ export default function Demo() {
           }
         }
       ],
-      victimLocation: { lat: 17.6186, lng: 77.8188 },
-      victimLabel: "Marpally Region (Bite Location)"
+      victimLocation: { lat: 17.5105, lng: 78.442 },
+      victimLabel: "Jeedimetla, Hyderabad"
     });
     setGpsStepIndex(0);
     setTimelineStage("route");
@@ -139,8 +139,8 @@ export default function Demo() {
           }
         }
       ],
-      victimLocation: { lat: 17.3310, lng: 77.9010 },
-      victimLabel: "Vikarabad Region"
+      victimLocation: { lat: 17.5623, lng: 78.4538 },
+      victimLabel: "Maisammaguda, Hyderabad"
     });
     setGpsStepIndex(4);
     setTimelineStage("handover");

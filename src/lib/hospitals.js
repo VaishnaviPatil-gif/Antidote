@@ -144,6 +144,27 @@ export async function updateStock(id, { vials, beds }) {
   return res.json();
 }
 
+/**
+ * Alert a hospital of an incoming patient — the "Confirm & alert hospital"
+ * action. POSTs the case to the backend so the hospital web dashboard's
+ * "Incoming Cases" shows it live. Never throws (offline-safe); returns the saved
+ * record or null on any failure.
+ * @param {object} caseData
+ * @returns {Promise<object|null>}
+ */
+export async function submitCase(caseData) {
+  try {
+    const res = await fetch(`${API_BASE}/api/cases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(caseData),
+    });
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Mock cases database shared between Dashboard and Routing */
 export const MOCK_INCOMING_CASES = [
   {

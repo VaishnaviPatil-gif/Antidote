@@ -58,19 +58,6 @@ export default function Hospital() {
         </div>
       </div>
 
-      {/* ── Dashboard link banner ── */}
-      <button
-        onClick={() => navigate("/dashboard")}
-        className="w-full rounded-xl border flex items-center justify-between px-3 py-2.5 text-xs font-bold active:scale-[.99] transition-transform"
-        style={{ borderColor: "#C5DBD9", color: C.teal, background: C.tealPale }}
-      >
-        <span className="flex items-center gap-1.5">
-          <Activity size={14} style={{ color: C.teal }} />
-          {t.dashboard.title}
-        </span>
-        <ChevronRight size={14} style={{ color: C.teal }} />
-      </button>
-
       {/* ── Incoming alert card ────────────────────────────────── */}
       <div
         className="rounded-2xl overflow-hidden"

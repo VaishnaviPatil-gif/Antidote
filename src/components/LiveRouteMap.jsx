@@ -33,7 +33,7 @@ const OSM_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 const OSRM_URL = "https://router.project-osrm.org/route/v1/driving";
 const RECALC_M = 80; // refetch the driving route once the user moves this far
-const DEFAULT_CENTER = { lat: 17.27, lng: 77.77 }; // Vikarabad fallback
+const DEFAULT_CENTER = { lat: 17.5623, lng: 78.4538 }; // Maisammaguda / MRU fallback
 
 /** Pulsing teal "you are here" marker. */
 const USER_ICON = L.divIcon({

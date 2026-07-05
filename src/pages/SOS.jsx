@@ -222,6 +222,14 @@ export default function SOS() {
 
   return (
     <div className="px-4 pt-4 pb-6 flex flex-col gap-4">
+      <style>{`
+        @keyframes sosPulse {
+          0%,100% { box-shadow: 0 10px 28px rgba(232,106,23,.32); }
+          50% { box-shadow: 0 12px 36px rgba(232,106,23,.55); }
+        }
+        .ap-sos-send { animation: sosPulse 2s ease-in-out infinite; }
+      `}</style>
+
       {/* ── Title ──────────────────────────────────────────────── */}
       <div className="flex items-start gap-2">
         <BackButton />
@@ -468,10 +476,15 @@ export default function SOS() {
       {/* ── Send / states ──────────────────────────────────────── */}
       {sendState === "sent" ? (
         <div className="flex flex-col gap-2">
-          <div className="rounded-2xl px-4 py-3 flex items-start gap-3" style={{ background: C.goodPale }}>
-            <CheckCircle2 size={22} style={{ color: C.good }} className="shrink-0" />
+          <div className="rounded-2xl px-4 py-4 flex items-start gap-3" style={{ background: C.goodPale, border: `1px solid ${C.good}33` }}>
+            <div
+              className="rounded-full flex items-center justify-center shrink-0"
+              style={{ background: C.good, width: 40, height: 40, boxShadow: `0 6px 16px ${C.good}44` }}
+            >
+              <CheckCircle2 size={22} style={{ color: "#fff" }} />
+            </div>
             <div className="min-w-0">
-              <div className="text-sm font-bold" style={{ color: C.good }}>
+              <div className="text-sm font-extrabold" style={{ color: C.good }}>
                 {t.sos.sent}
               </div>
               <div className="text-xs leading-snug" style={{ color: C.dark }}>
@@ -513,19 +526,29 @@ export default function SOS() {
         <button
           onClick={handleSend}
           disabled={sendState === "sending"}
-          className="w-full rounded-xl text-white font-bold flex items-center justify-center gap-2 active:scale-[.98] transition-transform disabled:opacity-80"
-          style={{ background: C.orange, height: 54, fontSize: 16, boxShadow: "0 8px 24px rgba(232,106,23,.18)" }}
+          className={`w-full rounded-2xl text-white font-extrabold flex items-center justify-center gap-2.5 active:scale-[.98] transition-transform disabled:opacity-90 ${sendState === "sending" ? "" : "ap-sos-send"}`}
+          style={{
+            background: `linear-gradient(135deg, #F5842A 0%, ${C.orange} 55%, #C85A10 100%)`,
+            height: 58,
+            fontSize: 17,
+            boxShadow: "0 10px 28px rgba(232,106,23,.32)",
+          }}
         >
           {sendState === "sending" ? (
             <>
               <span className="ap-spin inline-flex">
-                <Loader2 size={18} />
+                <Loader2 size={20} />
               </span>
               {t.sos.sending}
             </>
           ) : (
             <>
-              <Send size={18} />
+              <span
+                className="flex items-center justify-center rounded-full"
+                style={{ background: "rgba(255,255,255,.22)", width: 32, height: 32 }}
+              >
+                <Send size={17} />
+              </span>
               {t.sos.sendBtn}
             </>
           )}

@@ -247,8 +247,12 @@ export default function Tracker() {
       {/* ── SEVERITY + TREND (success state) ───────────────────── */}
       {hasLog && (
         <div
-          className="rounded-2xl border px-4 py-3"
-          style={{ borderColor: SEVERITY_TONE[severity] + "44", background: SEVERITY_PALE[severity] }}
+          className="rounded-2xl border px-4 py-3.5"
+          style={{
+            borderColor: SEVERITY_TONE[severity] + "44",
+            background: SEVERITY_PALE[severity],
+            boxShadow: `0 8px 22px ${SEVERITY_TONE[severity]}1F`,
+          }}
         >
           <div className="flex items-center justify-between">
             <div>
@@ -268,7 +272,7 @@ export default function Tracker() {
           </div>
 
           {/* Trend row */}
-          <div className="flex items-center gap-1.5 mt-2 text-sm font-semibold">
+          <div className="inline-flex items-center gap-1.5 mt-2.5 text-sm font-semibold rounded-full px-3 py-1" style={{ background: "#ffffffcc" }}>
             {trend === "worsening" && (
               <>
                 <TrendingUp size={16} style={{ color: C.danger }} />

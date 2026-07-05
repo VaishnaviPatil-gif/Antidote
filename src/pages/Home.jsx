@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Siren, Crosshair, CheckCircle2, Loader2, MapPin,
-  ChevronRight, ShieldQuestion, Pencil, Navigation2, Play, Boxes, Activity, BarChart3,
+  ChevronRight, ShieldQuestion, Pencil, Navigation2, Play, Mic,
 } from "lucide-react";
 import { C } from "../theme.js";
 import { tFor } from "../i18n.js";
@@ -23,13 +23,14 @@ import ResumeBanner from "../components/ResumeBanner.jsx";
  * Marpally scenario so the demo flow never breaks.
  */
 
-/** Seeded villages across Vikarabad district (coords from the routing data),
- *  used for the offline-friendly manual fallback. First entry is the default. */
+/** Seeded areas near Malla Reddy University (match the hospital coordinates),
+ *  used for the offline-friendly manual fallback. First entry is the default.
+ *  Keep these local to the hospitals so routing stays sensible if GPS is denied. */
 const SEED_VILLAGES = [
-  { label: "Marpally, Vikarabad", lat: 17.27, lng: 77.77 },
-  { label: "Doultabad", lat: 17.305, lng: 77.73 },
-  { label: "Tandur", lat: 17.245, lng: 77.575 },
-  { label: "Parigi", lat: 17.13, lng: 77.87 },
+  { label: "Maisammaguda", lat: 17.5623, lng: 78.4538 },
+  { label: "Dulapally", lat: 17.5290, lng: 78.4560 },
+  { label: "Kompally", lat: 17.5470, lng: 78.4870 },
+  { label: "Suraram", lat: 17.5150, lng: 78.4330 },
 ];
 const DEFAULT_LOCATION = SEED_VILLAGES[0];
 
@@ -145,7 +146,12 @@ export default function Home() {
       <button
         onClick={handleBitten}
         className="ap-hero w-full rounded-2xl text-white font-extrabold flex flex-col items-center justify-center gap-2 active:scale-[.99] transition-transform"
-        style={{ background: C.teal, minHeight: 168, padding: "20px" }}
+        style={{
+          background: `linear-gradient(145deg, ${C.tealLight} 0%, ${C.teal} 58%, ${C.tealDark} 100%)`,
+          minHeight: 168,
+          padding: "20px",
+          boxShadow: "0 14px 34px rgba(10,79,79,.30)",
+        }}
       >
         <span
           className="flex items-center justify-center rounded-2xl"
@@ -270,6 +276,28 @@ export default function Home() {
         )}
       </section>
 
+      {/* ── Voice assistant entry — hands-free, talk-and-go ── */}
+      <button
+        onClick={() => navigate("/assistant")}
+        className="rounded-2xl border px-4 py-3 flex items-center gap-3 text-left active:scale-[.99] transition-transform"
+        style={{ borderColor: C.teal, background: C.tealPale }}
+      >
+        <div className="rounded-lg p-2 shrink-0" style={{ background: C.teal }}>
+          <Mic size={18} style={{ color: "#fff" }} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold" style={{ color: C.teal }}>
+            {language === "hi" ? "वॉइस असिस्टेंट" : language === "te" ? "వాయిస్ అసిస్టెంట్" : "Voice Assistant"}
+          </div>
+          <div className="text-xs leading-snug" style={{ color: C.muted }}>
+            {language === "hi" ? "बोलें — मैं मार्गदर्शन कर सही जगह ले जाऊँगा।"
+              : language === "te" ? "మాట్లాడండి — నేను మార్గనిర్దేశం చేసి తీసుకెళ్తాను."
+              : "Speak — I'll guide you and take you where you need to go."}
+          </div>
+        </div>
+        <ChevronRight size={18} style={{ color: C.teal }} className="shrink-0" />
+      </button>
+
       {/* ── Quiet Learn entry (prevention — never blocks the flow) ── */}
       <button
         onClick={() => navigate("/learn")}
@@ -290,65 +318,8 @@ export default function Home() {
         <ChevronRight size={18} style={{ color: C.muted }} className="shrink-0" />
       </button>
 
-      {/* ── Hospital-staff entry — update the live antivenom/bed feed ── */}
-      <button
-        onClick={() => navigate("/stock")}
-        className="rounded-2xl bg-white border px-4 py-3 flex items-center gap-3 text-left active:scale-[.99] transition-transform"
-        style={{ borderColor: "#E1EAE9" }}
-      >
-        <div className="rounded-lg p-2 shrink-0" style={{ background: C.tealPale }}>
-          <Boxes size={18} style={{ color: C.teal }} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold" style={{ color: C.dark }}>
-            {t.home.staff}
-          </div>
-          <div className="text-xs leading-snug" style={{ color: C.muted }}>
-            {t.home.staffHint}
-          </div>
-        </div>
-        <ChevronRight size={18} style={{ color: C.muted }} className="shrink-0" />
-      </button>
-
-      {/* ── Hospital Dashboard entry — view all incoming patient cases ── */}
-      <button
-        onClick={() => navigate("/dashboard")}
-        className="rounded-2xl bg-white border px-4 py-3 flex items-center gap-3 text-left active:scale-[.99] transition-transform"
-        style={{ borderColor: "#E1EAE9" }}
-      >
-        <div className="rounded-lg p-2 shrink-0" style={{ background: C.tealPale }}>
-          <Activity size={18} style={{ color: C.teal }} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold" style={{ color: C.dark }}>
-            {t.dashboard.title}
-          </div>
-          <div className="text-xs leading-snug" style={{ color: C.muted }}>
-            {t.dashboard.subtitle}
-          </div>
-        </div>
-        <ChevronRight size={18} style={{ color: C.muted }} className="shrink-0" />
-      </button>
-
-      {/* ── Snakebite Analytics entry — view regional stats & trends ── */}
-      <button
-        onClick={() => navigate("/analytics")}
-        className="rounded-2xl bg-white border px-4 py-3 flex items-center gap-3 text-left active:scale-[.99] transition-transform"
-        style={{ borderColor: "#E1EAE9" }}
-      >
-        <div className="rounded-lg p-2 shrink-0" style={{ background: C.tealPale }}>
-          <BarChart3 size={18} style={{ color: C.teal }} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold" style={{ color: C.dark }}>
-            {t.analytics.title}
-          </div>
-          <div className="text-xs leading-snug" style={{ color: C.muted }}>
-            {t.analytics.subtitle}
-          </div>
-        </div>
-        <ChevronRight size={18} style={{ color: C.muted }} className="shrink-0" />
-      </button>
+      {/* Hospital-staff functions (stock updates, incoming cases, analytics) now
+          live in the separate web console — this app is victim-facing only. */}
 
       {/* ── Demo shortcut (demo builds only) — seed a full scenario & jump ── */}
       {DEMO_MODE && (

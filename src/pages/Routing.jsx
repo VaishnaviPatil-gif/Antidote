@@ -8,7 +8,7 @@ import { useEmergency } from "../context/EmergencyContext.jsx";
 import BackButton from "../components/BackButton.jsx";
 import NavigationOverlay from "../components/NavigationOverlay.jsx";
 import ClinicianHandover from "../components/ClinicianHandover.jsx";
-import { SEED_FACILITIES, fetchHospitals, getPredictedRemainingVials, getCapacityRating } from "../lib/hospitals.js";
+import { SEED_FACILITIES, fetchHospitals, getPredictedRemainingVials, getCapacityRating, submitCase } from "../lib/hospitals.js";
 import { formatDistance, formatDuration } from "../lib/geo.js";
 
 // The interactive Leaflet map is lazy-loaded so the (heavy) mapping bundle only
@@ -169,6 +169,8 @@ export default function AntidotePlusRouting() {
     biteTime,
     severity,
     setSeverity,
+    snake,
+    patientId,
     recommendedHospital,
     setRecommendedHospital,
   } = useEmergency();
@@ -293,8 +295,24 @@ export default function AntidotePlusRouting() {
 
   const handleConfirm = useCallback(() => {
     setPhase("confirming");
+    // Alert the hospital: write this case to the shared backend so the hospital
+    // web dashboard's "Incoming Cases" shows it live. Fire-and-forget + offline-safe.
+    if (recommended) {
+      submitCase({
+        id: patientId || undefined,
+        severity,
+        species: snake?.species || null,
+        confidence: snake?.confidence ?? null,
+        gps: `${victim.lat.toFixed(4)}, ${victim.lng.toFixed(4)}`,
+        eta_min: Math.round(liveMetrics?.min ?? recommended.eta),
+        assigned_hospital_id: recommended.id,
+        assigned_hospital: recommended.name,
+        mins_since_bite: minsSinceBite,
+        status: "enroute",
+      });
+    }
     setTimeout(() => setPhase("confirmed"), 1700);
-  }, []);
+  }, [recommended, severity, snake, patientId, victim, liveMetrics, minsSinceBite]);
 
   const tierName = (k) => t[k] || k;
 
@@ -312,7 +330,7 @@ export default function AntidotePlusRouting() {
         style={{ background: "#F7FAFA", boxShadow: "0 12px 48px rgba(10,79,79,.16)", minHeight: "100vh" }}
       >
         {/* ── Header ─────────────────────────────────────────────── */}
-        <header style={{ background: C.teal }} className="px-4 pt-4 pb-3 text-white">
+        <header style={{ background: C.teal, paddingTop: "calc(16px + env(safe-area-inset-top, 0px))" }} className="px-4 pb-3 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <BackButton tone="onTeal" />

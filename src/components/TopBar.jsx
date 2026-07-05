@@ -31,8 +31,8 @@ export default function TopBar() {
 
   return (
     <header
-      style={{ background: C.teal }}
-      className="px-4 pt-4 pb-3 text-white"
+      style={{ background: C.teal, paddingTop: "calc(16px + env(safe-area-inset-top, 0px))" }}
+      className="px-4 pb-3 text-white"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

@@ -403,8 +403,11 @@ export function EmergencyProvider({ children }) {
       ...DEFAULT_STATE,
       language: s.language,
       biteTime: new Date(now - 18 * 60000),
-      victimLocation: { lat: 17.56229, lng: 78.4538 },
-      victimLabel: "Malla Reddy University, Hyderabad",
+      // Positioned next to Basti Dawakhana (the one surveyed clinic with NO
+      // antivenom) so routing demonstrates the core USP: the app routes PAST the
+      // nearest-but-empty govt clinic to the nearest stocked hospital (the "trap").
+      victimLocation: { lat: 17.5105, lng: 78.442 },
+      victimLabel: "Jeedimetla, Hyderabad",
       snake: { species: "Russell's Viper", confidence: 0.93, venomous: true },
       severity: "severe",
       symptomLog: [

@@ -151,82 +151,144 @@ export default function FirstAid() {
         <HeartPulse size={20} style={{ color: C.tealLight }} className="shrink-0" />
       </div>
 
-      {/* ── Voice Guided Control Panel ─────────────────────────── */}
+      {/* ── Voice-Guided First Aid (hero) ──────────────────────── */}
       <div
-        className="rounded-2xl bg-white border p-4 flex flex-col gap-4 shadow-sm"
-        style={{ borderColor: "#E1EAE9" }}
+        className="rounded-2xl overflow-hidden"
+        style={{
+          background: `linear-gradient(140deg, ${C.tealLight} 0%, ${C.teal} 55%, ${C.tealDark} 100%)`,
+          boxShadow: "0 12px 30px rgba(10,79,79,.28)",
+        }}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Volume2 size={18} style={{ color: C.teal }} />
-            <span className="text-xs font-extrabold uppercase tracking-wider" style={{ color: C.dark }}>
-              {language === "te" ? "ప్రథమ చికిత్స వాయిస్ గైడ్" : language === "hi" ? "प्राथमिक चिकित्सा वॉयस गाइड" : "Voice First Aid Guide"}
-            </span>
+        <style>{`
+          @keyframes apEq { 0%,100%{transform:scaleY(.32)} 50%{transform:scaleY(1)} }
+          @keyframes apRing { 0%{transform:scale(.85);opacity:.65} 70%,100%{transform:scale(1.7);opacity:0} }
+        `}</style>
+
+        {/* Header + status + equalizer */}
+        <div className="px-4 pt-4 pb-3 flex items-center justify-between text-white">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className="rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: "rgba(255,255,255,.16)", width: 38, height: 38 }}
+            >
+              <Volume2 size={20} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold leading-tight">
+                {language === "te" ? "వాయిస్ ప్రథమ చికిత్స" : language === "hi" ? "वॉयस प्राथमिक चिकित्सा" : "Voice First-Aid Guide"}
+              </div>
+              <div className="text-[11px] font-semibold truncate" style={{ color: "#CDEFEC" }} aria-live="polite">
+                {vLabel}
+              </div>
+            </div>
           </div>
-          {isPlaying && (
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: C.good }}></span>
-              <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: C.good }}></span>
-            </span>
+
+          {isPlaying ? (
+            <div className="flex items-end gap-[3px] h-6 shrink-0" aria-hidden="true">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <span
+                  key={i}
+                  className="w-[3.5px] rounded-full"
+                  style={{
+                    height: "100%",
+                    background: "#fff",
+                    transformOrigin: "bottom",
+                    animation: `apEq ${0.7 + (i % 3) * 0.18}s ease-in-out ${i * 0.09}s infinite`,
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <HeartPulse size={20} className="shrink-0" style={{ color: "#BFE3E1" }} />
           )}
         </div>
 
-        {/* Large Control Buttons + live status text */}
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={resetSpeech}
-              disabled={currentSentenceIndex === -1}
-              aria-label="Reset Voice"
-              className="rounded-full w-11 h-11 flex items-center justify-center border active:scale-95 transition-transform disabled:opacity-40"
-              style={{ borderColor: "#C5DBD9", background: "#fff", color: C.teal }}
-            >
-              <RotateCcw size={18} />
-            </button>
-
-            <button
-              onClick={togglePlay}
-              disabled={!ttsAvailable}
-              aria-label={isPlaying ? "Stop Voice" : "Play Voice"}
-              className="rounded-full w-14 h-14 flex items-center justify-center text-white active:scale-95 transition-transform disabled:opacity-40"
-              style={{ background: C.teal }}
-            >
-              {isPlaying ? <Pause size={24} fill="#fff" /> : <Play size={24} fill="#fff" className="ml-1" />}
-            </button>
-
-            {/* Balances the reset button so the play button stays centred. */}
-            <div className="w-11 h-11" aria-hidden="true" />
-          </div>
-
+        {/* Live sentence being spoken */}
+        <div className="px-4">
           <div
-            className="text-xs font-bold text-center"
-            style={{ color: !ttsAvailable ? C.danger : C.teal }}
-            aria-live="polite"
+            className="rounded-xl px-3 py-2.5 text-sm font-semibold leading-snug min-h-[46px] flex items-center transition-all text-white"
+            style={{ background: "rgba(255,255,255,.14)" }}
           >
-            {vLabel}
+            {currentSentenceIndex >= 0
+              ? sentences[currentSentenceIndex]
+              : language === "te"
+              ? "దశలను వినడానికి ప్లే నొక్కండి"
+              : language === "hi"
+              ? "चरण सुनने के लिए प्ले दबाएँ"
+              : "Press play to hear each step aloud"}
           </div>
         </div>
 
-        {/* Language selector for Voice guidance */}
-        <div className="grid grid-cols-3 gap-2 text-xs font-bold border-t pt-3" style={{ borderColor: "#F2F7F6" }}>
+        {/* Progress through the guide */}
+        <div className="px-4 pt-3">
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,.22)" }}>
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${sentences.length ? Math.round(((currentSentenceIndex + 1) / sentences.length) * 100) : 0}%`,
+                background: C.orange,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="px-4 py-4 flex items-center justify-center gap-6">
+          <button
+            onClick={resetSpeech}
+            disabled={currentSentenceIndex === -1}
+            aria-label="Reset"
+            className="rounded-full w-11 h-11 flex items-center justify-center active:scale-95 transition-transform disabled:opacity-40"
+            style={{ background: "rgba(255,255,255,.16)", color: "#fff" }}
+          >
+            <RotateCcw size={18} />
+          </button>
+
+          <div className="relative flex items-center justify-center">
+            {isPlaying && (
+              <span
+                className="absolute rounded-full"
+                style={{ width: 64, height: 64, background: "rgba(255,255,255,.35)", animation: "apRing 1.6s ease-out infinite" }}
+              />
+            )}
+            <button
+              onClick={togglePlay}
+              disabled={!ttsAvailable}
+              aria-label={isPlaying ? "Stop" : "Play"}
+              className="relative rounded-full w-16 h-16 flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
+              style={{ background: "#fff", color: C.teal, boxShadow: "0 6px 16px rgba(0,0,0,.22)" }}
+            >
+              {isPlaying ? <Pause size={26} fill={C.teal} /> : <Play size={26} fill={C.teal} className="ml-0.5" />}
+            </button>
+          </div>
+
+          {/* Balances the reset button so play stays centred. */}
+          <div className="w-11 h-11" aria-hidden="true" />
+        </div>
+
+        {/* Language selector */}
+        <div className="px-4 pb-4 grid grid-cols-3 gap-2">
           {[
             { key: "en", label: "English" },
             { key: "hi", label: "हिन्दी" },
-            { key: "te", label: "తెలుగు" }
-          ].map(lang => (
-            <button
-              key={lang.key}
-              onClick={() => setLanguage(lang.key)}
-              className="rounded-xl py-1.5 border active:scale-95 transition-transform"
-              style={{
-                background: language === lang.key ? C.tealPale : "#fff",
-                color: language === lang.key ? C.teal : C.muted,
-                borderColor: language === lang.key ? C.teal : "#E1EAE9"
-              }}
-            >
-              {lang.label}
-            </button>
-          ))}
+            { key: "te", label: "తెలుగు" },
+          ].map((lng) => {
+            const active = language === lng.key;
+            return (
+              <button
+                key={lng.key}
+                onClick={() => setLanguage(lng.key)}
+                className="rounded-xl py-2 text-xs font-bold active:scale-95 transition-all"
+                style={{
+                  background: active ? "#fff" : "rgba(255,255,255,.12)",
+                  color: active ? C.teal : "#EAF7F6",
+                  border: active ? "none" : "1px solid rgba(255,255,255,.18)",
+                }}
+              >
+                {lng.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 

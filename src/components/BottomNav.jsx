@@ -47,20 +47,26 @@ export default function BottomNav() {
                 onClick={() => navigate(to)}
                 aria-label={t.nav[key]}
                 aria-current={active ? "page" : undefined}
-                className="w-full flex flex-col items-center justify-center gap-0.5 transition-colors"
-                style={{
-                  minHeight: 58,
-                  padding: "8px 4px",
-                  color: active ? C.teal : C.muted,
-                }}
+                className="w-full flex flex-col items-center justify-center gap-1 active:scale-95 transition-transform"
+                style={{ minHeight: 58, padding: "8px 4px" }}
               >
-                <Icon
-                  size={22}
-                  strokeWidth={active ? 2.6 : 2}
-                  fill={active && key === "emergency" ? "rgba(13,110,110,.12)" : "none"}
-                />
                 <span
-                  className="text-xs font-semibold leading-none"
+                  className="flex items-center justify-center rounded-full transition-all duration-200"
+                  style={{
+                    width: 46,
+                    height: 26,
+                    background: active ? C.tealPale : "transparent",
+                  }}
+                >
+                  <Icon
+                    size={21}
+                    strokeWidth={active ? 2.6 : 2}
+                    style={{ color: active ? C.teal : C.muted }}
+                    fill={active && key === "emergency" ? "rgba(13,110,110,.14)" : "none"}
+                  />
+                </span>
+                <span
+                  className="text-[11px] font-bold leading-none"
                   style={{ color: active ? C.teal : C.muted }}
                 >
                   {t.nav[key]}
