@@ -135,7 +135,12 @@ const VICTIM = { lat: 17.56229, lng: 78.4538 };
 // with a graceful cached→seed fallback. SEED_FACILITIES is the offline default.
 
 const RURAL_SPEED_KMH = 35;
-const STALE_MIN = 360; // 6 hours → flag for reconfirmation
+// Staleness time-gate DISABLED: stock is never flagged "stale" or dropped from
+// routing because of how long ago it was updated. Previously stock older than
+// 6h was excluded from recommendations, which could hide every hospital during
+// a long rehearsal/demo. Kept as a constant (not deleted) so the feature can be
+// re-enabled later by setting a real minute threshold.
+const STALE_MIN = Number.POSITIVE_INFINITY;
 
 const toRad = (d) => (d * Math.PI) / 180;
 function haversineKm(a, b) {
