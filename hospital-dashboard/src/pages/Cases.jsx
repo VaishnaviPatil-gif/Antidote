@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Loader2, Clock, MapPin, Activity, Timer, Droplets, RefreshCw, Inbox, Check, CheckCircle2, ChevronRight, AlertTriangle } from "lucide-react";
 import * as api from "../api.js";
 import { C, SEVERITY_TONE } from "../theme.js";
@@ -27,18 +27,59 @@ export default function Cases() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Notification chime for newly-arriving cases. seenIds stays null until the
+  // first load so the initial batch of cases doesn't trigger a sound.
+  const seenIds = useRef(null);
+  const audioCtxRef = useRef(null);
+
+  const playChime = useCallback(() => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      let ctx = audioCtxRef.current;
+      if (!ctx) { ctx = new Ctx(); audioCtxRef.current = ctx; }
+      if (ctx.state === "suspended") ctx.resume();
+      const now = ctx.currentTime;
+      // Soft two-note rising chime (G5 → C6).
+      [[784, 0], [1046.5, 0.12]].forEach(([freq, offset]) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        const t = now + offset;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.3);
+      });
+    } catch { /* audio unavailable — ignore */ }
+  }, []);
+
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const data = await api.fetchCases();
-      setCases(data.cases || []);
+      const list = data.cases || [];
+      // Chime once if any case id we haven't seen before shows up — but never
+      // on the very first load (that's the existing backlog, not a new alert).
+      const ids = new Set(list.map((c) => c.id));
+      if (seenIds.current === null) {
+        seenIds.current = ids;
+      } else {
+        const hasNew = list.some((c) => !seenIds.current.has(c.id));
+        seenIds.current = ids;
+        if (hasNew) playChime();
+      }
+      setCases(list);
       setError("");
     } catch (e) {
       if (!silent) setError(e.message || "Could not load cases");
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [playChime]);
 
   // Live auto-refresh every 4s so new app requests arrive automatically.
   useEffect(() => {
