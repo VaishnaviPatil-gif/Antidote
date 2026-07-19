@@ -233,6 +233,63 @@ def _genai():
     return genai
 
 
+# ── Model fallback chain (quota resilience) ──────────────────────────────────
+# The Gemini free tier is only ~20 requests/day PER MODEL, and each model has a
+# SEPARATE quota bucket. During a live demo the primary model is exhausted fast,
+# so instead of dropping straight to the keyword/deterministic fallbacks we first
+# fail over to the next model. Only when every candidate is quota-limited do the
+# callers use their safe local fallbacks.
+_FALLBACK_MODELS = ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest")
+
+
+def _model_candidates() -> list[str]:
+    """Configured primary first, then distinct fallbacks (dedup, order-stable)."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for name in (settings.gemini_model, *_FALLBACK_MODELS):
+        if name and name not in seen:
+            seen.add(name)
+            out.append(name)
+    return out
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    """True for a rate-limit / daily-quota exhaustion (retry the next model)."""
+    blob = f"{type(exc).__name__} {exc}".lower()
+    return any(
+        k in blob
+        for k in ("429", "quota", "resourceexhausted", "rate limit",
+                  "ratelimit", "exhausted", "too many requests")
+    )
+
+
+def _generate(genai, parts):
+    """Run generate_content, transparently failing over models on quota.
+
+    `parts` is whatever generate_content accepts (a string prompt, or a
+    [prompt, image_part] list). Returns the response, or None if EVERY model was
+    quota-limited. A non-quota error is raised (same input won't fare better on
+    another model, and the caller's except-block turns it into a safe fallback).
+    """
+    last_quota_exc: Exception | None = None
+    for name in _model_candidates():
+        try:
+            model = genai.GenerativeModel(name)
+            resp = model.generate_content(parts)
+            if name != settings.gemini_model:
+                logger.info("gemini: served by fallback model %s", name)
+            return resp
+        except Exception as exc:  # noqa: BLE001
+            if _is_quota_error(exc):
+                logger.warning("gemini model %s quota-limited; trying next", name)
+                last_quota_exc = exc
+                continue
+            raise
+    if last_quota_exc is not None:
+        logger.warning("gemini: all models quota-limited; using local fallback")
+    return None
+
+
 def _normalise_confidence(value) -> float | None:
     """Coerce a model confidence to a clamped 0-1 float, or None if invalid.
 
@@ -341,10 +398,10 @@ def identify(image_b64: str, mime: str = "image/jpeg") -> dict:
         return dict(SAFE_DEFAULT)
     try:
         data = base64.b64decode(image_b64, validate=False)
-        model = genai.GenerativeModel(settings.gemini_model)
-        resp = model.generate_content(
-            [_IDENTIFY_PROMPT, {"mime_type": mime, "data": data}]
-        )
+        resp = _generate(genai, [_IDENTIFY_PROMPT, {"mime_type": mime, "data": data}])
+        if resp is None:  # every model quota-limited → safe default (assume venomous)
+            logger.info("identify: all Gemini models quota-limited; safe default")
+            return dict(SAFE_DEFAULT)
 
         # ── Pipeline diagnostics ─────────────────────────────────────────────
         # Make the whole path observable so it is always clear whether a name
@@ -507,10 +564,9 @@ def summarize(symptom_log: list, bite_time: str | None, language: str = "en") ->
     if genai is None:
         return {"summary": fallback, "source": "fallback"}
     try:
-        model = genai.GenerativeModel(settings.gemini_model)
         context = {"biteTime": bite_time, "symptomLog": symptom_log}
-        resp = model.generate_content(_SUMMARIZE_PROMPT + json.dumps(context))
-        text = (getattr(resp, "text", "") or "").strip()
+        resp = _generate(genai, _SUMMARIZE_PROMPT + json.dumps(context))
+        text = (getattr(resp, "text", "") or "").strip() if resp else ""
         if not text:
             return {"summary": fallback, "source": "fallback"}
         return {"summary": text, "source": "gemini"}
@@ -576,15 +632,14 @@ def evaluate_severity(symptoms: dict, snake: dict | None, mins_since_bite: int, 
     if genai is None:
         return fallback
     try:
-        model = genai.GenerativeModel(settings.gemini_model)
         prompt = _SEVERITY_PROMPT.format(
             symptoms=json.dumps(symptoms),
             snake=json.dumps(snake) if snake else "None",
             time_since_bite=f"{mins_since_bite} minutes",
             swelling_progression=swelling_progression
         )
-        resp = model.generate_content(prompt)
-        text = (getattr(resp, "text", "") or "").strip()
+        resp = _generate(genai, prompt)
+        text = (getattr(resp, "text", "") or "").strip() if resp else ""
         if not text:
             return fallback
             
@@ -740,6 +795,56 @@ def _hospital_context_text(app_context: dict | None) -> str:
     return "\n".join(lines)
 
 
+_SYMPTOM_LABELS = {
+    "breathing": "breathing difficulty",
+    "vision": "blurred/double vision or drooping eyelids",
+    "bleeding": "abnormal bleeding",
+    "drowsy": "drowsiness or slurred speech",
+}
+
+
+def _patient_context_text(app_context: dict | None) -> str:
+    """Compact, prompt-ready summary of the CURRENT patient state (or "").
+
+    Lets the assistant personalise its reply — quote how long ago the bite was,
+    the tracked severity, the identified snake, and any red-flag symptoms — so a
+    question like "is it serious?" gets an answer grounded in this patient's data
+    rather than a generic script.
+    """
+    if not app_context or not isinstance(app_context, dict):
+        return ""
+    p = app_context.get("patient")
+    if not p or not isinstance(p, dict):
+        return ""
+
+    bits: list[str] = []
+    mins = p.get("mins_since_bite")
+    if isinstance(mins, (int, float)):
+        bits.append(f"bite was ~{int(mins)} min ago")
+    sev = p.get("severity")
+    if sev:
+        bits.append(f"tracked severity: {sev}")
+    snake = p.get("snake")
+    if snake:
+        venom = " (venomous)" if p.get("venomous") else ""
+        bits.append(f"snake: {snake}{venom}")
+    flags = [
+        _SYMPTOM_LABELS[k]
+        for k in ("breathing", "vision", "bleeding", "drowsy")
+        if (p.get("symptoms") or {}).get(k) == "yes"
+    ]
+    if flags:
+        bits.append("RED-FLAG symptoms present: " + ", ".join(flags))
+    if not bits:
+        return ""
+    return (
+        "CURRENT PATIENT STATE — reference this to personalise your reply, and if "
+        "red-flag symptoms are present urge immediate hospital care:\n- "
+        + "; ".join(bits)
+        + "\n"
+    )
+
+
 def _stock_answer(app_context: dict | None, lang: str) -> str | None:
     """Deterministic spoken answer to a stock question, straight from live data.
 
@@ -796,7 +901,10 @@ _VOICE_CHAT_PROMPT = (
     "urge them to reach emergency care immediately.\n"
     "6. For hospital_stock questions, ANSWER using the live hospital data below "
     "(vial counts, distances). Never invent numbers; if none is given, tell them "
-    "to open the hospital screen.\n\n"
+    "to open the hospital screen.\n"
+    "7. If patient state is given, use it: refer to how long ago the bite was, the "
+    "identified snake, and any red-flag symptoms to make the reply specific.\n\n"
+    "{patient_data}"
     "{hospital_data}"
     "Conversation so far:\n{history}\n\n"
     "Patient just said: \"{user_text}\"\n\n"
@@ -860,16 +968,17 @@ def voice_chat_respond(
         return fallback
 
     hospital_data = _hospital_context_text(app_context)
+    patient_data = _patient_context_text(app_context)
     try:
-        model = genai.GenerativeModel(settings.gemini_model)
         prompt = _VOICE_CHAT_PROMPT.format(
             language=lang_name,
             history=history_str,
             user_text=user_text,
+            patient_data=(patient_data + "\n") if patient_data else "",
             hospital_data=(hospital_data + "\n\n") if hospital_data else "",
         )
-        resp = model.generate_content(prompt)
-        text = (getattr(resp, "text", "") or "").strip()
+        resp = _generate(genai, prompt)
+        text = (getattr(resp, "text", "") or "").strip() if resp else ""
         if not text:
             return fallback
 
