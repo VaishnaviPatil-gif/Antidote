@@ -17,7 +17,7 @@ const API_BASE = (import.meta.env?.VITE_API_BASE ?? "").replace(/\/+$/, "");
 
 let mediaRecorder = null;
 let audioChunks = [];
-let recordingResolve = null;
+let vadCleanup = null; // tears down the Web Audio silence detector, if any
 
 /**
  * Check if the browser supports audio recording.
@@ -28,14 +28,102 @@ export function isRecordingSupported() {
 }
 
 /**
+ * Attach a voice-activity detector to a live mic stream. Watches the microphone
+ * energy (RMS of the time-domain waveform) and, once the user has actually
+ * spoken, fires `onSilence` after `silenceMs` of continuous quiet — enabling
+ * true hands-free "tap once, speak, done" without a second tap. A hard `maxMs`
+ * cap fires `onSilence` too, so a stuck-open mic (or constant background noise)
+ * never records forever.
+ *
+ * Returns a cleanup function that stops the analyser and releases its nodes.
+ * Best-effort: if the Web Audio API is unavailable it returns a no-op and the
+ * caller simply falls back to manual tap-to-stop.
+ */
+function attachSilenceDetector(stream, { onSilence, silenceMs, maxMs }) {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return () => {};
+
+  let ctx;
+  try {
+    ctx = new AC();
+  } catch {
+    return () => {};
+  }
+
+  const source = ctx.createMediaStreamSource(stream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  source.connect(analyser);
+  const buf = new Uint8Array(analyser.fftSize);
+
+  // Speech must cross SPEAK_RMS before silence-tracking begins, so the timer
+  // never trips during the initial quiet gap before the user starts talking.
+  const SPEAK_RMS = 0.035;
+  const SILENCE_RMS = 0.02;
+  const started = Date.now();
+  let hasSpoken = false;
+  let quietSince = 0;
+  let raf = 0;
+  let done = false;
+
+  const fire = () => {
+    if (done) return;
+    done = true;
+    onSilence?.();
+  };
+
+  const tick = () => {
+    if (done) return;
+    analyser.getByteTimeDomainData(buf);
+    // RMS around the 128 midpoint, normalised to ~0..1.
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = (buf[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / buf.length);
+    const now = Date.now();
+
+    if (rms > SPEAK_RMS) {
+      hasSpoken = true;
+      quietSince = 0;
+    } else if (hasSpoken && rms < SILENCE_RMS) {
+      if (!quietSince) quietSince = now;
+      else if (now - quietSince >= silenceMs) return fire();
+    }
+
+    if (now - started >= maxMs) return fire();
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+
+  return () => {
+    done = true;
+    if (raf) cancelAnimationFrame(raf);
+    try { source.disconnect(); } catch { /* already gone */ }
+    try { ctx.close(); } catch { /* already closed */ }
+  };
+}
+
+/**
  * Start recording audio from the user's microphone.
- * Resolves when stopRecording() is called, returning a Blob.
+ * Resolves when stopRecording() is called (or silence auto-stops it),
+ * returning a Blob.
+ *
+ * @param {object} [opts]
+ * @param {() => void} [opts.onAutoStop] - Called when silence detection stops
+ *   the recording on its own, so the UI can reflect the transition to
+ *   "processing" without a manual tap. Auto-stop is enabled only when provided.
+ * @param {number} [opts.silenceMs=1500] - Quiet duration (after speech) that
+ *   ends the recording.
+ * @param {number} [opts.maxMs=12000] - Hard cap on recording length.
  * @returns {Promise<Blob>} The recorded audio as a Blob (webm or ogg).
  */
-export async function startRecording() {
+export async function startRecording(opts = {}) {
   if (mediaRecorder && mediaRecorder.state === "recording") {
     throw new Error("Already recording");
   }
+  const { onAutoStop = null, silenceMs = 1500, maxMs = 12000 } = opts;
 
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
@@ -54,8 +142,8 @@ export async function startRecording() {
   };
 
   const recordingPromise = new Promise((resolve) => {
-    recordingResolve = resolve;
     mediaRecorder.onstop = () => {
+      if (vadCleanup) { vadCleanup(); vadCleanup = null; }
       const blob = new Blob(audioChunks, {
         type: mediaRecorder.mimeType || "audio/webm",
       });
@@ -66,6 +154,19 @@ export async function startRecording() {
     };
   });
 
+  // Hands-free auto-stop. When silence is detected we notify the UI first, then
+  // stop the recorder (which resolves the promise above with the captured blob).
+  if (onAutoStop) {
+    vadCleanup = attachSilenceDetector(stream, {
+      silenceMs,
+      maxMs,
+      onSilence: () => {
+        onAutoStop();
+        stopRecording();
+      },
+    });
+  }
+
   mediaRecorder.start();
   return recordingPromise;
 }
@@ -75,6 +176,7 @@ export async function startRecording() {
  * will resolve with the audio Blob.
  */
 export function stopRecording() {
+  if (vadCleanup) { vadCleanup(); vadCleanup = null; }
   if (mediaRecorder && mediaRecorder.state === "recording") {
     mediaRecorder.stop();
   }
@@ -134,6 +236,51 @@ export async function sendVoiceChat(
       throw new Error(`Voice chat failed: HTTP ${res.status}`);
     }
 
+    return await res.json();
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+/**
+ * Second half of the two-step voice flow: send the transcript (from
+ * speechToText) to /api/voice-reply and get back the AI reply text, the in-app
+ * action, and the spoken audio. Splitting STT off lets the caller show the
+ * user's words the instant STT returns, instead of waiting on Gemini + TTS.
+ *
+ * @param {string} text - The transcript to reply to.
+ * @param {string} language - Detected language code (e.g. "te-IN").
+ * @param {Array<{role:string,text:string}>|null} [history] - Recent turns.
+ * @param {object|null} [appContext] - Live app context {hospitals, recommended, patient}.
+ * @param {number} [timeoutMs=30000]
+ * @returns {Promise<{ai_response:string, action:string, audio_base64:string, language:string}>}
+ */
+export async function sendVoiceReply(
+  text,
+  language,
+  history = null,
+  appContext = null,
+  timeoutMs = 30000
+) {
+  const ac = new AbortController();
+  const id = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_BASE}/api/voice-reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        language: language || "te-IN",
+        history: history && history.length ? history : null,
+        context: appContext || null,
+      }),
+      signal: ac.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(`[voice-reply] HTTP ${res.status}: ${body.slice(0, 200)}`);
+      throw new Error(`Voice reply failed: HTTP ${res.status}`);
+    }
     return await res.json();
   } finally {
     clearTimeout(id);
