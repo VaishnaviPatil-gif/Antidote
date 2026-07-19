@@ -45,7 +45,7 @@ Rather than routing victims to the *nearest* healthcare facility, **Antidote+** 
 1. **Nearest ≠ Equipped**  
    Stock-aware routing sends the victim past empty Primary Health Centres (PHCs) to the hospital that actually has antivenom, utilizing a live, timestamped inventory system.
 2. **Hands-free Voice Assistant**  
-   An offline-resilient, voice-driven pipeline (🎤 speak → transcribe → reason → speak back) answers first-aid questions and executes navigation tasks (e.g., *"take me to a hospital"* transitions to the routing interface; *"how many vials are nearby?"* reads from active inventories).
+   An offline-resilient, voice-driven pipeline (🎤 speak → transcribe → reason → speak back) answers first-aid questions and executes navigation tasks (e.g., *"take me to a hospital"* transitions to the routing interface; *"how many vials are nearby?"* reads from active inventories). A **global floating mic** is reachable on every emergency screen — tap once, speak, and it **auto-stops on silence** (no second tap), so a panicked user never has to hunt for the assistant. Replies are **personalized** to the live case (bite age, tracked severity, identified snake, red-flag symptoms).
 3. **Unified Backend Architecture**  
    The victim's mobile client and the **hospital staff dashboard** interact with the same FastAPI server. A confirmed case submitted by the victim appears on the hospital's live dashboard board within seconds.
 
@@ -67,12 +67,12 @@ Rather than routing victims to the *nearest* healthcare facility, **Antidote+** 
 > 9. Trigger the **SOS system** to relay worsening symptoms and a live Google Maps location link to pre-configured family contacts.
 > 10. Cut your internet connection to view the **Offline Banner** indicating the system is safely operating on cached local storage.
 > 
-> **Voice Assistant Path:** Navigate to **Home → Voice Assistant**, trigger the microphone, and try saying:
+> **Voice Assistant Path:** Tap the **floating mic** (bottom-right on any emergency screen) — or open **Home → Voice Assistant** for the full-screen view — then simply speak (it stops listening on its own) and try:
 > - *"take me to a hospital"*
 > - *"how many antivenom vials are nearby?"*
 > - *"which snake is this?"*
 >
-> The assistant will respond verbally in the language detected (Telugu, Hindi, or English) and automatically trigger navigation controls.
+> The assistant will respond verbally in the language detected (Telugu, Hindi, or English), personalize the reply to the active case, and automatically trigger navigation controls.
 > 
 > *Note: Prevention articles and instructions live under **Home → Learn**, completely isolated from the emergency flow.*
 
@@ -93,7 +93,13 @@ flowchart TD
 > [!NOTE]
 > **Intent Actions:** `route_hospital`, `hospital_stock`, `sos`, `identify_snake`, `track_symptoms`, `first_aid`, or `none`. Actionable intents trigger page changes, whereas information queries (like stock level checking) are answered directly without changing screens.
 >
-> **Quota-Proof Fallback Protection:** Gemini's free tier allows ~20 requests/day per model. If exceeded, the backend falls back to using the transcribed text for localized keyword extraction, querying live hospital feeds to build text answers, and synthesizing the response.
+> **Hands-free capture:** The recorder attaches a Web Audio silence detector (VAD) — after you speak, ~1.5s of quiet auto-submits the clip, so the whole loop runs on a single tap.
+>
+> **Two-step, instant transcript:** The mic clip is transcribed first (`POST /api/stt`) so your words appear immediately, then the reply + spoken audio are fetched (`POST /api/voice-reply` → Gemini + TTS). Nothing is blocked on the full round trip.
+>
+> **Personalized context:** The client sends live app context — hospital stock **and** the current patient state (bite age, tracked severity, identified snake, red-flag symptoms) — so replies are specific to the case, not a generic script.
+>
+> **Multi-tier Fallback Protection:** Gemini's free tier allows ~20 requests/day per model, and each model has a *separate* quota bucket. When the primary model (`gemini-2.5-flash-lite`) is exhausted, the backend transparently fails over to `gemini-2.5-flash` → `gemini-2.0-flash` before dropping to the deterministic path: localized keyword intent extraction + live hospital feeds to build and synthesize a spoken answer with **zero** Gemini calls.
 
 ---
 
@@ -131,7 +137,9 @@ Below is the directory map with links directly to primary logic modules:
     * [hospitals.js](file:///c:/project2/Antidote+/src/lib/hospitals.js) — Live hospital inventory feed helpers.
     * [gemini.js](file:///c:/project2/Antidote+/src/lib/gemini.js) & [image.js](file:///c:/project2/Antidote+/src/lib/image.js) — Gemini API helpers and client-side image compression.
     * [ttsService.js](file:///c:/project2/Antidote+/src/lib/ttsService.js) — Native Capacitor Text-to-Speech adapter.
-    * [voiceChatService.js](file:///c:/project2/Antidote+/src/lib/voiceChatService.js) — Audio recording capture and streaming pipeline.
+    * [voiceChatService.js](file:///c:/project2/Antidote+/src/lib/voiceChatService.js) — Audio capture with silence-detection auto-stop + two-step voice API client.
+    * [haptics.js](file:///c:/project2/Antidote+/src/lib/haptics.js) — Tactile feedback (`navigator.vibrate`, no native plugin) for key emergency taps.
+    * [useVoiceAssistant.js](file:///c:/project2/Antidote+/src/hooks/useVoiceAssistant.js) — Shared voice brain (context build, mic state machine, intent→navigation) behind both the page and the global mic.
     * [geo.js](file:///c:/project2/Antidote+/src/lib/geo.js) & [db.js](file:///c:/project2/Antidote+/src/lib/db.js) — Geo-coordinate mapping utilities and local IndexedDB database.
   * 📄 **Pages** — `src/pages/`
     * [Home.jsx](file:///c:/project2/Antidote+/src/pages/Home.jsx) — Primary dashboard with entryways to voice assistant and learn paths.
@@ -139,7 +147,7 @@ Below is the directory map with links directly to primary logic modules:
     * [Snake.jsx](file:///c:/project2/Antidote+/src/pages/Snake.jsx) — Camera interface for image analysis via Gemini.
     * [Tracker.jsx](file:///c:/project2/Antidote+/src/pages/Tracker.jsx) — Medical triage loop (symptom monitoring log).
     * [Routing.jsx](file:///c:/project2/Antidote+/src/pages/Routing.jsx) — Stock-aware Leaflet mapping and routing.
-    * [VoiceAssistant.jsx](file:///c:/project2/Antidote+/src/pages/VoiceAssistant.jsx) — Microphone assistant panel.
+    * [VoiceAssistant.jsx](file:///c:/project2/Antidote+/src/pages/VoiceAssistant.jsx) — Full-screen microphone assistant (a global floating mic, [VoiceFab.jsx](file:///c:/project2/Antidote+/src/components/VoiceFab.jsx), mirrors it on every other screen).
     * [SOS.jsx](file:///c:/project2/Antidote+/src/pages/SOS.jsx) — Contact notification and sharing dashboard.
     * [HandoverViewer.jsx](file:///c:/project2/Antidote+/src/pages/HandoverViewer.jsx) — QR handover screen for healthcare workers.
     * [Demo.jsx](file:///c:/project2/Antidote+/src/pages/Demo.jsx) — Quick setup tool to mock data variables during judging/demo.
@@ -256,7 +264,8 @@ This triggers Android Studio. From there, select **Build > Build Bundle(s) / APK
 | `/api/auth/me` | `GET` | Token Auth | Identifies and validates active user credentials. |
 | `/api/cases` | `POST` | Open | Submits a case report alerting the designated target hospital. |
 | `/api/cases` | `GET` | Hospital Auth | Feeds live patient alerts to the corresponding hospital panel. |
-| `/api/voice-chat` | `POST` | Open | Processes input audio streams and returns verbal TTS responses. |
+| `/api/voice-chat` | `POST` | Open | Full one-shot loop: audio → STT → Gemini → TTS (kept for compatibility). |
+| `/api/voice-reply` | `POST` | Open | Two-step flow: transcript text → Gemini reply + action + TTS audio. |
 | `/api/tts` | `POST` | Open | Converts custom text strings to synthesized verbal audio. |
 | `/api/stt` | `POST` | Open | Transcribes audio speech content to text. |
 
@@ -272,9 +281,9 @@ This triggers Android Studio. From there, select **Build > Build Bundle(s) / APK
 
 ## ⚠️ Known Limitations (Hackathon Build)
 
-- **Gemini Free-Tier Rate Limits:** The pipeline uses `gemini-2.5-flash-lite` for voice processing and `gemini-2.5-flash` for classification tasks. These models are limited to ~20 requests daily. Exceeding this triggers the system's keyword fallback pipeline.
+- **Gemini Free-Tier Rate Limits:** The pipeline uses `gemini-2.5-flash-lite` as the primary model. It is limited to ~20 requests daily per model, so the backend fails over across `flash-lite → flash → 2.0-flash` (separate quota buckets) and, once all are exhausted, drops to the deterministic keyword pipeline.
 - **Audio Codec Compatibility:** The client-side recorder is built on `webm/opus`. Sarvam AI fully supports this format, but performance can vary across native Android WebView configurations.
-- **Volatile Storage:** Database items (active cases, live hospital stocks) are currently maintained in RAM memory on the FastAPI instance and reset when the server restarts.
+- **Storage:** Active cases and live hospital stocks are held in memory and mirrored to JSON files (`app/data/*.json`), so they **survive a server restart**. There is no external database — the single-file store keeps the demo self-contained.
 
 ---
 
