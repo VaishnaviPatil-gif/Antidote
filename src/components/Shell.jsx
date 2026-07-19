@@ -4,6 +4,7 @@ import { SCREEN_BG, FRAME_BG, FRAME_SHADOW } from "../theme.js";
 import TopBar from "./TopBar.jsx";
 import BottomNav from "./BottomNav.jsx";
 import OfflineBanner from "./OfflineBanner.jsx";
+import VoiceFab from "./VoiceFab.jsx";
 
 /**
  * App shell for every screen EXCEPT the routing hero.
@@ -39,6 +40,10 @@ export default function Shell() {
         </main>
 
         <BottomNav />
+
+        {/* Always-available voice assistant — floats within the app frame on
+            every Shell screen (hides itself on /assistant, which has its own). */}
+        <VoiceFab />
       </div>
     </div>
   );
