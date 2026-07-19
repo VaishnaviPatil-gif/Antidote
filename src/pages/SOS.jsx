@@ -11,6 +11,7 @@ import { useEmergency, minutesSinceBite } from "../context/EmergencyContext.jsx"
 import { useOnline } from "../hooks/useOnline.js";
 import { composeSummary, buildAlertMessage, mapsLink, DEMO_RECOMMENDED } from "../lib/handover.js";
 import { startCall, openSms, shareOrCopy } from "../lib/share.js";
+import { warn } from "../lib/haptics.js";
 import EmergencyTimeline from "../components/EmergencyTimeline.jsx";
 import BackButton from "../components/BackButton.jsx";
 import {
@@ -127,6 +128,7 @@ export default function SOS() {
     // opens the device's messaging app prefilled with the alert (location link
     // included). The coordination timeline below still advances so the on-stage
     // demo shows the hospital-side mobilisation even if the composer is dismissed.
+    warn(); // firm haptic — an SOS is being dispatched to family
     if (allPhones.length) openSms(allPhones.join(","), message);
     setSendState("sending");
     timerRef.current = setTimeout(() => setSendState("sent"), 1500);

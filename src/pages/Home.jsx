@@ -7,6 +7,7 @@ import {
 import { C } from "../theme.js";
 import { tFor } from "../i18n.js";
 import { useEmergency } from "../context/EmergencyContext.jsx";
+import { warn } from "../lib/haptics.js";
 import ResumeBanner from "../components/ResumeBanner.jsx";
 
 /**
@@ -123,6 +124,7 @@ export default function Home() {
       setManualOpen(true);
       return;
     }
+    warn(); // firm tactile confirmation for the most important tap in the app
     startEmergency({ lat: loc.lat, lng: loc.lng }, loc.label);
     navigate("/first-aid");
   }, [location, startEmergency, navigate]);
