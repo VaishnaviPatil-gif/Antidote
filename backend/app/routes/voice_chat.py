@@ -25,6 +25,8 @@ from ..models import (
     TtsRequest,
     TtsResponse,
     VoiceChatResponse,
+    VoiceReplyRequest,
+    VoiceReplyResponse,
 )
 from ..services import gemini
 from ..services import sarvam
@@ -113,6 +115,39 @@ async def voice_chat(
         ai_response=ai_response,
         audio_base64=audio_b64,
         action=action,
+    )
+
+
+@router.post("/voice-reply", response_model=VoiceReplyResponse, tags=["voice"])
+def voice_reply(req: VoiceReplyRequest) -> VoiceReplyResponse:
+    """Second half of the two-step voice flow: text → Gemini reply → TTS audio.
+
+    The client transcribes the mic audio with /api/stt first (so it can show the
+    user's words immediately), then calls this with that transcript. Splitting
+    the loop keeps the transcript from being blocked on the slower Gemini+TTS
+    round trip. Never raises — the Gemini brain and TTS both fall back safely.
+    """
+    result = gemini.voice_chat_respond(
+        user_text=req.text,
+        language=req.language,
+        conversation_history=req.history,
+        app_context=req.context,
+    )
+    ai_response = result["reply"]
+    action = result["action"]
+
+    tts_bytes = sarvam.generate_speech(text=ai_response, language_code=req.language)
+    if tts_bytes is None:
+        logger.warning("voice_reply: TTS failed, returning text-only response")
+        audio_b64 = ""
+    else:
+        audio_b64 = base64.b64encode(tts_bytes).decode("ascii")
+
+    return VoiceReplyResponse(
+        ai_response=ai_response,
+        action=action,
+        audio_base64=audio_b64,
+        language=req.language,
     )
 
 

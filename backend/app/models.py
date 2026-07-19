@@ -132,6 +132,35 @@ class VoiceChatResponse(BaseModel):
     )
 
 
+# ── /api/voice-reply ───────────────────────────────────────────────────────
+class VoiceReplyRequest(BaseModel):
+    """Text (already transcribed client-side via /api/stt) → reply + spoken audio.
+
+    Powers the two-step voice flow: the client shows the transcript instantly
+    after STT, then calls this for the AI reply + audio, so nothing is blocked on
+    the full round trip.
+    """
+
+    text: str = Field(..., description="What the user said (STT transcript).")
+    language: str = Field(default="te-IN", description="Detected language code.")
+    history: list[dict] | None = Field(
+        default=None, description="Prior turns as [{role, text}] dicts."
+    )
+    context: dict | None = Field(
+        default=None,
+        description="Live app context: {hospitals, recommended, patient}.",
+    )
+
+
+class VoiceReplyResponse(BaseModel):
+    """AI reply text + in-app action + spoken audio for the two-step flow."""
+
+    ai_response: str = Field(..., description="Gemini's reply text.")
+    action: str = Field(default="none", description="One in-app action to trigger.")
+    audio_base64: str = Field(..., description="Base64-encoded MP3 of the reply.")
+    language: str = Field(..., description="Language code used for TTS.")
+
+
 # ── /api/tts ───────────────────────────────────────────────────────────────
 class TtsRequest(BaseModel):
     """Text-to-speech request."""
