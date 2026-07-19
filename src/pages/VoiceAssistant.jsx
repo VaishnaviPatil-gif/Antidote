@@ -1,40 +1,26 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Mic, Square, Loader2, Volume2, MapPin, Send, Camera, Activity,
   ChevronRight, AlertCircle, Sparkles,
 } from "lucide-react";
 import { C } from "../theme.js";
-import { useEmergency } from "../context/EmergencyContext.jsx";
 import BackButton from "../components/BackButton.jsx";
-import { fetchHospitals } from "../lib/hospitals.js";
-import { haversineKm, etaMin, RURAL_SPEED_KMH } from "../lib/geo.js";
-import {
-  isRecordingSupported, startRecording, stopRecording,
-  sendVoiceChat, playAudioBase64, stopAudio,
-} from "../lib/voiceChatService.js";
+import { stopAudio } from "../lib/voiceChatService.js";
+import { useVoiceAssistant } from "../hooks/useVoiceAssistant.js";
 
 /**
  * Voice Assistant (§ conversational entry) — a talking chatbot for the victim.
  *
- * Loop: tap the mic → record → POST /api/voice-chat (Sarvam STT → Gemini →
- * Sarvam TTS) → the spoken reply plays back AND, when the user asked for
- * something actionable ("take me to a hospital", "call for help"), the backend
- * returns an `action` and we navigate them straight to that screen. The audio
- * keeps playing across the SPA navigation (playback lives in the service module,
- * not this component), so the confirmation is still heard on the next screen.
+ * All the recording / STT / Gemini / TTS / navigation logic lives in the shared
+ * useVoiceAssistant hook (so this page and the global floating mic behave
+ * identically). This component is just the full-screen presentation of that
+ * loop: tap the mic → speak → it auto-stops on silence → the reply is shown and
+ * spoken → an actionable intent navigates to the right screen.
  *
  * Shortcut chips do the same navigation without the mic — a reliable fallback
  * for a noisy demo hall where speech recognition might struggle.
  */
-
-// Actions that move the user to another screen. first_aid / none just talk.
-const ACTION_ROUTE = {
-  route_hospital: "/routing",
-  sos: "/sos",
-  identify_snake: "/snake",
-  track_symptoms: "/tracker",
-};
 
 const ACTION_META = {
   route_hospital: { icon: MapPin, label: { en: "Nearest hospital", hi: "नज़दीकी अस्पताल", te: "సమీప ఆసుపత్రి" } },
@@ -60,6 +46,7 @@ const UI = {
     noMic: "Voice input isn't available here. Tap a shortcut below instead.",
     micDenied: "Microphone permission is off. Enable it, or tap a shortcut below.",
     netErr: "Couldn't reach the assistant. Check your connection and try again.",
+    sttErr: "I didn't catch that — tap the mic and try again.",
     greeting: "I'm your Antidote+ assistant. Tell me what happened, or say \"take me to a hospital\".",
   },
   hi: {
@@ -70,6 +57,7 @@ const UI = {
     noMic: "यहाँ वॉइस उपलब्ध नहीं है। नीचे शॉर्टकट दबाएँ।",
     micDenied: "माइक्रोफ़ोन बंद है। इसे चालू करें, या नीचे शॉर्टकट दबाएँ।",
     netErr: "असिस्टेंट तक नहीं पहुँच सका। कनेक्शन जाँचें और फिर कोशिश करें।",
+    sttErr: "समझ नहीं पाया — माइक दबाकर फिर कोशिश करें।",
     greeting: "मैं आपका Antidote+ असिस्टेंट हूँ। बताइए क्या हुआ, या कहिए \"मुझे अस्पताल ले चलो\"।",
   },
   te: {
@@ -80,124 +68,30 @@ const UI = {
     noMic: "ఇక్కడ వాయిస్ అందుబాటులో లేదు. కింద షార్ట్‌కట్ నొక్కండి.",
     micDenied: "మైక్రోఫోన్ ఆఫ్‌లో ఉంది. దాన్ని ఆన్ చేయండి, లేదా కింద షార్ట్‌కట్ నొక్కండి.",
     netErr: "అసిస్టెంట్‌ను చేరలేకపోయాం. కనెక్షన్ చూసి మళ్లీ ప్రయత్నించండి.",
+    sttErr: "నాకు అర్థం కాలేదు — మైక్ నొక్కి మళ్లీ ప్రయత్నించండి.",
     greeting: "నేను మీ Antidote+ అసిస్టెంట్. ఏం జరిగిందో చెప్పండి, లేదా \"నన్ను ఆసుపత్రికి తీసుకెళ్లు\" అనండి.",
   },
 };
 
+// Backend error code → localized message.
+const ERR_KEY = { net: "netErr", mic: "micDenied", stt: "sttErr" };
+
 export default function VoiceAssistant() {
   const navigate = useNavigate();
-  const { language, victimLocation } = useEmergency();
+  const {
+    language, status, error, messages, supported, toggle, busy,
+  } = useVoiceAssistant();
   const lang = UI[language] ? language : "en";
   const t = UI[lang];
 
-  // Live hospital context so the bot can answer "how many vials nearby?" with
-  // real data (and do so even when Gemini is over its quota).
-  const contextRef = useRef(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!victimLocation) return;
-      try {
-        const { facilities } = await fetchHospitals();
-        const ranked = facilities
-          .map((f) => {
-            const km = haversineKm(victimLocation, f);
-            return {
-              name: f.name,
-              vials: f.vials,
-              km: Math.round(km * 10) / 10,
-              eta_min: etaMin(km, RURAL_SPEED_KMH),
-              sector: f.sector,
-            };
-          })
-          .sort((a, b) => a.km - b.km);
-        const recommended = ranked.find((h) => h.vials > 0) || ranked[0] || null;
-        if (!cancelled) contextRef.current = { hospitals: ranked, recommended };
-      } catch {
-        /* no stock context — the assistant still works, just can't quote vials */
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [victimLocation]);
-
-  const [messages, setMessages] = useState([]); // {role:"user"|"bot", text, action?}
-  const [status, setStatus] = useState("idle"); // idle | recording | processing | speaking
-  const [error, setError] = useState("");
-  const supported = isRecordingSupported();
-
-  const recordingRef = useRef(null); // Promise<Blob> from startRecording()
-  const messagesRef = useRef(messages);
-  const scrollRef = useRef(null);
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
-
+  const scrollRef = React.useRef(null);
   // Auto-scroll the transcript to the newest message.
-  useEffect(() => {
+  React.useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, status]);
 
-  // Stop any playback if the user leaves the screen mid-sentence.
-  useEffect(() => () => { stopAudio(); }, []);
-
-  const runAssistant = useCallback(async (blob) => {
-    setStatus("processing");
-    try {
-      const history = messagesRef.current.slice(-6).map((m) => ({
-        role: m.role === "user" ? "user" : "assistant",
-        text: m.text,
-      }));
-      const res = await sendVoiceChat(blob, history, contextRef.current);
-
-      setMessages((m) => [
-        ...m,
-        { role: "user", text: res.transcript },
-        { role: "bot", text: res.ai_response, action: res.action },
-      ]);
-
-      // Navigate on an actionable intent — after a beat so the spoken
-      // confirmation begins first (audio continues on the next screen).
-      const route = ACTION_ROUTE[res.action];
-      if (route) setTimeout(() => navigate(route), 1500);
-
-      // Play the spoken reply.
-      setStatus("speaking");
-      playAudioBase64(res.audio_base64)
-        .catch(() => {})
-        .finally(() => setStatus((s) => (s === "speaking" ? "idle" : s)));
-    } catch (e) {
-      console.warn("[assistant]", e);
-      setError(t.netErr);
-      setStatus("idle");
-    }
-  }, [navigate, t.netErr]);
-
-  const handleMic = useCallback(async () => {
-    if (status === "processing") return;
-
-    // Currently recording → stop and send.
-    if (status === "recording") {
-      stopRecording();
-      setStatus("processing");
-      try {
-        const blob = await recordingRef.current;
-        await runAssistant(blob);
-      } catch (e) {
-        console.warn("[assistant] mic", e);
-        setError(t.micDenied);
-        setStatus("idle");
-      }
-      return;
-    }
-
-    // Idle or speaking → start a new recording (interrupts playback).
-    setError("");
-    stopAudio();
-    const p = startRecording();
-    p.catch(() => {}); // real errors surface at the await above
-    recordingRef.current = p;
-    setStatus("recording");
-  }, [status, runAssistant, t.micDenied]);
-
-  const busy = status === "processing";
+  const handleMic = toggle;
+  const errText = error ? t[ERR_KEY[error]] : "";
   const mic = MIC_STATES[status];
 
   return (
@@ -250,10 +144,10 @@ export default function VoiceAssistant() {
       </div>
 
       {/* Error */}
-      {error && (
+      {errText && (
         <div className="mx-4 mb-2 flex items-start gap-2 rounded-xl px-3 py-2 text-[13px] font-semibold"
              style={{ background: C.dangerPale, color: C.danger }}>
-          <AlertCircle size={16} className="shrink-0 mt-0.5" /> {error}
+          <AlertCircle size={16} className="shrink-0 mt-0.5" /> {errText}
         </div>
       )}
 
