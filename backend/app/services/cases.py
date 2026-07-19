@@ -1,15 +1,26 @@
 """Incoming-patient case store.
 
 When the victim app taps "Confirm & alert hospital", it POSTs a case here; the
-hospital dashboard reads it back (scoped to the logged-in facility). In-memory
-for the demo — a restart resets to the seeded examples. Newest first, deduped by
-id, capped so the list stays readable.
+hospital dashboard reads it back (scoped to the logged-in facility).
+
+The store is held in memory and mirrored to a JSON file (mirroring the hospital
+registry in hospitals.py) so a backend restart mid-demo doesn't wipe the board —
+a real risk when the free-tier server recycles or is restarted between rounds.
+Newest first, deduped by id, capped so the list stays readable.
 """
 
 from __future__ import annotations
 
+import json
+import logging
 import threading
 import time
+from pathlib import Path
+
+logger = logging.getLogger("antidote.cases")
+
+# Persist next to the app package, alongside the hospital store.
+_STORE_PATH = Path(__file__).resolve().parent.parent / "data" / "cases_store.json"
 
 _lock = threading.Lock()
 _cases: list[dict] | None = None
@@ -32,10 +43,32 @@ _SEED = [
 ]
 
 
-def _load() -> list[dict]:
-    global _cases
+def _persist() -> None:
+    """Best-effort write of the in-memory list to disk (never raises)."""
     if _cases is None:
-        _cases = [dict(c) for c in _SEED]
+        return
+    try:
+        _STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _STORE_PATH.write_text(json.dumps(_cases, indent=2), encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("could not persist case store: %s", exc)
+
+
+def _load() -> list[dict]:
+    """Load from disk, falling back to (and persisting) the seed examples."""
+    global _cases
+    if _cases is not None:
+        return _cases
+    try:
+        if _STORE_PATH.exists():
+            data = json.loads(_STORE_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                _cases = [dict(c) for c in data if isinstance(c, dict)]
+                return _cases
+    except Exception as exc:  # noqa: BLE001 — corrupt / unreadable → reseed
+        logger.warning("case store unreadable, reseeding: %s", exc)
+    _cases = [dict(c) for c in _SEED]
+    _persist()
     return _cases
 
 
@@ -58,4 +91,5 @@ def add_case(data: dict) -> dict:
         cases[:] = [c for c in cases if c.get("id") != cid]
         cases.insert(0, rec)
         del cases[_MAX:]
+        _persist()
         return dict(rec)
