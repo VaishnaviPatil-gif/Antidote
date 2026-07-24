@@ -1,4 +1,4 @@
-"""Hospital antivenom-stock registry — the live inventory behind the routing.
+﻿"""Hospital antivenom-stock registry â€” the live inventory behind the routing.
 
 Antidote+'s differentiator is routing a victim to the nearest facility that
 ACTUALLY HAS anti-snake-venom (ASV) in stock. That only means something if the
@@ -8,7 +8,7 @@ authoritative store:
   - Seeded with the Vikarabad-district facilities the app ships with.
   - Held in memory and mirrored to a JSON file so an ASHA worker's stock update
     (POST /api/hospitals/{id}/stock) survives a server restart.
-  - No external database — a single JSON file keeps the demo self-contained and
+  - No external database â€” a single JSON file keeps the demo self-contained and
     the deployment trivial, while still being a real fetched-with-timestamp feed.
 
 Every record carries an ISO `updated_at` so the client can render "stock updated
@@ -37,24 +37,24 @@ def _now() -> datetime:
 
 
 def _ago(minutes: int) -> str:
-    """ISO timestamp `minutes` in the past — used to seed realistic update ages."""
+    """ISO timestamp `minutes` in the past â€” used to seed realistic update ages."""
     return (_now() - timedelta(minutes=minutes)).isoformat()
 
 
-# ── Seed inventory ──────────────────────────────────────────────────────────
+# â”€â”€ Seed inventory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Mirrors src/lib/hospitals.js SEED_FACILITIES so the client's offline fallback
 # and this live feed agree. Coordinates are real; `vials` is the seeded stock.
 def _seed() -> dict[str, dict]:
-    # Real facilities near Malla Reddy University (Hyderabad). ASV stock reflects
-    # the team's phone survey; mirrors src/lib/hospitals.js SEED_FACILITIES.
+    # Facilities near CMR Group of Institutions, Kandlakoya / Medchal Road.
+    # Mirrors src/lib/hospitals.js SEED_FACILITIES.
     rows = [
-        # id,          name,                                        tier,       lat,      lng,      vials, icu,   sector,   beds, updated_min
-        ("mrn",        "Malla Reddy Narayana Multispeciality",      "tertiary", 17.54399, 78.43338, 22,  True,  "private", 30,  20),
-        ("slg",        "SLG Hospitals, Bachupally",                 "tertiary", 17.52817, 78.36259, 16,  True,  "private", 24,  35),
-        ("reach",      "Reach Super Speciality Hospital",           "tertiary", 17.549,   78.487,   12,  True,  "private", 18,  48),
-        ("arundathi",  "Arundathi Hospital",                        "ah",       17.523,   78.462,   8,   False, "govt",    8,   60),
-        ("basti",      "Basti Dawakhana (Dulapally)",               "phc",      17.51288, 78.44052, 0,   False, "govt",    0,   90),
-        ("gandhi",     "Gandhi Hospital, Secunderabad",             "tertiary", 17.42312, 78.50345, 120, True,  "govt",    40,  15),
+        # id,              name,                                      tier,       lat,       lng,       vials, icu,   sector,    beds, updated_min
+        ("cmrims",          "CMR Institute of Medical Sciences",       "tertiary", 17.59620, 78.48630, 28, True,  "private", 32, 12),
+        ("srikara",         "Srikara Hospitals, Kompally",            "tertiary", 17.53142, 78.48750, 20, True,  "private", 26, 24),
+        ("mrn",             "Malla Reddy Narayana Multispeciality",   "tertiary", 17.54399, 78.43338, 22, True,  "private", 30, 20),
+        ("govt_medchal",    "Government Hospital, Medchal",           "ah",       17.62972, 78.48139, 18, False, "govt",    18, 18),
+        ("chc_shamirpet",   "CHC Shamirpet",                          "chc",      17.59280, 78.57480, 14, False, "govt",    12, 42),
+        ("area_malkajgiri", "Area Hospital Malkajgiri",               "ah",       17.45048, 78.53212, 24, False, "govt",    24, 36),
     ]
     return {
         r[0]: {
@@ -84,7 +84,7 @@ def _load() -> dict[str, dict]:
             if isinstance(data, dict) and data:
                 _store = data
                 return _store
-    except Exception as exc:  # corrupt / unreadable file → reseed
+    except Exception as exc:  # corrupt / unreadable file â†’ reseed
         logger.warning("hospital store unreadable, reseeding: %s", exc)
     _store = _seed()
     _persist()
@@ -151,3 +151,4 @@ def add_hospital(hospital_id: str, data: dict) -> dict:
         }
         _persist()
         return dict(store[hospital_id])
+
