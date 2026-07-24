@@ -37,12 +37,12 @@ _accounts_lock = threading.Lock()
 _accounts_cache: dict[str, dict] | None = None
 
 DEFAULT_ACCOUNTS = {
-    "mrn":       {"password": "mrn123",     "hospital_id": "mrn",       "name": "Malla Reddy Narayana"},
-    "gandhi":    {"password": "gandhi123",  "hospital_id": "gandhi",    "name": "Gandhi Hospital"},
-    "slg":       {"password": "slg123",     "hospital_id": "slg",       "name": "SLG Hospitals"},
-    "reach":     {"password": "reach123",   "hospital_id": "reach",     "name": "Reach Super Speciality"},
-    "arundathi": {"password": "arun123",    "hospital_id": "arundathi", "name": "Arundathi Hospital"},
-    "basti":     {"password": "basti123",   "hospital_id": "basti",     "name": "Basti Dawakhana"},
+    "cmrims":          {"password": "cmrims123",   "hospital_id": "cmrims",          "name": "CMR Institute of Medical Sciences"},
+    "srikara":         {"password": "srikara123",  "hospital_id": "srikara",         "name": "Srikara Hospitals, Kompally"},
+    "mrn":             {"password": "mrn123",      "hospital_id": "mrn",             "name": "Malla Reddy Narayana"},
+    "govt_medchal":    {"password": "medchal123",  "hospital_id": "govt_medchal",    "name": "Government Hospital, Medchal"},
+    "chc_shamirpet":   {"password": "shamir123",   "hospital_id": "chc_shamirpet",   "name": "CHC Shamirpet"},
+    "area_malkajgiri": {"password": "malkaj123",   "hospital_id": "area_malkajgiri", "name": "Area Hospital Malkajgiri"},
     # District health officer — sees every facility.
     "admin":     {"password": "admin123",   "hospital_id": None,        "name": "District Health Office"},
 }
