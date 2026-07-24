@@ -18,6 +18,8 @@ const API_BASE = (import.meta.env?.VITE_API_BASE ?? "").replace(/\/+$/, "");
 let mediaRecorder = null;
 let audioChunks = [];
 let vadCleanup = null; // tears down the Web Audio silence detector, if any
+let speechRecognition = null;
+let speechResult = { transcript: "", language: "" };
 
 /**
  * Check if the browser supports audio recording.
@@ -25,6 +27,62 @@ let vadCleanup = null; // tears down the Web Audio silence detector, if any
  */
 export function isRecordingSupported() {
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+function recognitionCtor() {
+  if (typeof window === "undefined") return null;
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function startBrowserRecognition(language = "en-IN") {
+  const Ctor = recognitionCtor();
+  speechResult = { transcript: "", language };
+  if (!Ctor) return () => speechResult;
+
+  let rec;
+  try {
+    rec = new Ctor();
+    rec.lang = language || "en-IN";
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+  } catch {
+    return () => speechResult;
+  }
+
+  rec.onresult = (event) => {
+    let finalText = "";
+    let interimText = "";
+    for (let i = 0; i < event.results.length; i++) {
+      const text = event.results[i]?.[0]?.transcript || "";
+      if (event.results[i].isFinal) finalText += `${text} `;
+      else interimText += `${text} `;
+    }
+    const transcript = (finalText || interimText).trim();
+    if (transcript) speechResult = { transcript, language: rec.lang || language };
+  };
+  rec.onerror = () => {};
+  rec.onend = () => {
+    if (speechRecognition === rec) speechRecognition = null;
+  };
+
+  try {
+    speechRecognition = rec;
+    rec.start();
+  } catch {
+    speechRecognition = null;
+  }
+
+  return () => {
+    const latest = speechResult;
+    try {
+      rec.stop();
+    } catch {
+      try { rec.abort(); } catch { /* already stopped */ }
+    }
+    if (speechRecognition === rec) speechRecognition = null;
+    return latest;
+  };
 }
 
 /**
@@ -58,8 +116,8 @@ function attachSilenceDetector(stream, { onSilence, silenceMs, maxMs }) {
 
   // Speech must cross SPEAK_RMS before silence-tracking begins, so the timer
   // never trips during the initial quiet gap before the user starts talking.
-  const SPEAK_RMS = 0.035;
-  const SILENCE_RMS = 0.02;
+  const SPEAK_RMS = 0.018;
+  const SILENCE_RMS = 0.012;
   const started = Date.now();
   let hasSpoken = false;
   let quietSince = 0;
@@ -114,18 +172,20 @@ function attachSilenceDetector(stream, { onSilence, silenceMs, maxMs }) {
  * @param {() => void} [opts.onAutoStop] - Called when silence detection stops
  *   the recording on its own, so the UI can reflect the transition to
  *   "processing" without a manual tap. Auto-stop is enabled only when provided.
- * @param {number} [opts.silenceMs=1500] - Quiet duration (after speech) that
+ * @param {number} [opts.silenceMs=900] - Quiet duration (after speech) that
  *   ends the recording.
- * @param {number} [opts.maxMs=12000] - Hard cap on recording length.
+ * @param {number} [opts.maxMs=8000] - Hard cap on recording length.
+ * @param {string} [opts.language="en-IN"] - Browser STT language hint.
  * @returns {Promise<Blob>} The recorded audio as a Blob (webm or ogg).
  */
 export async function startRecording(opts = {}) {
   if (mediaRecorder && mediaRecorder.state === "recording") {
     throw new Error("Already recording");
   }
-  const { onAutoStop = null, silenceMs = 1500, maxMs = 12000 } = opts;
+  const { onAutoStop = null, silenceMs = 900, maxMs = 8000, language = "en-IN" } = opts;
 
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const stopBrowserRecognition = startBrowserRecognition(language);
 
   // Prefer webm (Chrome/Edge) → ogg (Firefox) → fallback
   const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -144,8 +204,13 @@ export async function startRecording(opts = {}) {
   const recordingPromise = new Promise((resolve) => {
     mediaRecorder.onstop = () => {
       if (vadCleanup) { vadCleanup(); vadCleanup = null; }
+      const browserStt = stopBrowserRecognition();
       const blob = new Blob(audioChunks, {
         type: mediaRecorder.mimeType || "audio/webm",
+      });
+      Object.defineProperties(blob, {
+        browserTranscript: { value: browserStt.transcript || "", enumerable: false },
+        browserLanguage: { value: browserStt.language || language, enumerable: false },
       });
       // Stop all tracks to release the mic
       stream.getTracks().forEach((t) => t.stop());
@@ -177,6 +242,10 @@ export async function startRecording(opts = {}) {
  */
 export function stopRecording() {
   if (vadCleanup) { vadCleanup(); vadCleanup = null; }
+  if (speechRecognition) {
+    try { speechRecognition.stop(); } catch { try { speechRecognition.abort(); } catch { /* already stopped */ } }
+    speechRecognition = null;
+  }
   if (mediaRecorder && mediaRecorder.state === "recording") {
     mediaRecorder.stop();
   }
@@ -318,20 +387,38 @@ export async function textToSpeech(
  * @param {Blob} audioBlob - Audio to transcribe
  * @returns {Promise<{transcript: string, language: string}>}
  */
-export async function speechToText(audioBlob) {
+export async function speechToText(audioBlob, timeoutMs = 10000) {
   const formData = new FormData();
   formData.append("audio", audioBlob, "recording.webm");
 
-  const res = await fetch(`${API_BASE}/api/stt`, {
-    method: "POST",
-    body: formData,
-  });
+  const browserTranscript = (audioBlob?.browserTranscript || "").trim();
+  const browserLanguage = audioBlob?.browserLanguage || "en-IN";
+  const ac = new AbortController();
+  const id = setTimeout(() => ac.abort(), timeoutMs);
 
-  if (!res.ok) {
-    throw new Error(`STT failed: HTTP ${res.status}`);
+  try {
+    const res = await fetch(`${API_BASE}/api/stt`, {
+      method: "POST",
+      body: formData,
+      signal: ac.signal,
+    });
+
+    if (!res.ok) {
+      if (browserTranscript) {
+        return { transcript: browserTranscript, language: browserLanguage, source: "browser" };
+      }
+      throw new Error(`STT failed: HTTP ${res.status}`);
+    }
+
+    return await res.json();
+  } catch (err) {
+    if (browserTranscript) {
+      return { transcript: browserTranscript, language: browserLanguage, source: "browser" };
+    }
+    throw err;
+  } finally {
+    clearTimeout(id);
   }
-
-  return await res.json();
 }
 
 // ── Audio Playback ──────────────────────────────────────────────────────────

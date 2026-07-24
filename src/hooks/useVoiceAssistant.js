@@ -7,6 +7,7 @@ import {
   isRecordingSupported, startRecording, stopRecording,
   speechToText, sendVoiceReply, playAudioBase64, stopAudio,
 } from "../lib/voiceChatService.js";
+import { speak, stop as stopLocalSpeech } from "../lib/ttsService.js";
 import * as haptics from "../lib/haptics.js";
 
 /**
@@ -36,6 +37,70 @@ export const ACTION_ROUTE = {
 // How long to let the spoken confirmation begin before we navigate (audio keeps
 // playing across the SPA route change, so the confirmation is still heard).
 const NAV_DELAY_MS = 1400;
+
+const LOCAL_REPLIES = {
+  route_hospital: {
+    en: "Okay, taking you to the nearest hospital that has antivenom. Stay calm.",
+    hi: "Okay, I am opening the nearest hospital with antivenom. Please stay calm.",
+    te: "Okay, antivenom unna nearest hospital screen open chestunnanu. Calm ga undandi.",
+  },
+  sos: {
+    en: "Opening SOS now. You can alert your emergency contacts.",
+    hi: "I am opening SOS now so you can alert your emergency contacts.",
+    te: "SOS open chestunnanu. Emergency contacts ki alert pampandi.",
+  },
+  identify_snake: {
+    en: "Opening snake identification. Take a photo only if it is safe.",
+    hi: "I am opening snake identification. Take a photo only if it is safe.",
+    te: "Snake identify screen open chestunnanu. Safe aithe matrame photo teeyandi.",
+  },
+  track_symptoms: {
+    en: "Opening the symptom tracker now.",
+    hi: "I am opening the symptom tracker now.",
+    te: "Symptoms tracker open chestunnanu.",
+  },
+  first_aid: {
+    en: "Stay calm. Keep the bitten limb still and below heart level. Do not cut, suck, or tie it. Reach a hospital with antivenom quickly.",
+    hi: "Stay calm. Keep the bitten limb still. Do not cut, suck, or tie it. Reach a hospital with antivenom quickly.",
+    te: "Calm ga undandi. Bite aina limb ni move cheyyakandi. Cut, suck, tight bandage cheyyakandi. Antivenom unna hospital ki vellandi.",
+  },
+  hospital_stock: {
+    en: "Opening hospital routing so you can see live antivenom stock nearby.",
+    hi: "I am opening hospital routing so you can see live antivenom stock nearby.",
+    te: "Nearby antivenom stock chudadaniki hospital routing open chestunnanu.",
+  },
+  none: {
+    en: "I heard you. Stay calm, keep the bitten limb still, and go to a hospital with antivenom immediately.",
+    hi: "I heard you. Stay calm, keep the bitten limb still, and go to a hospital with antivenom immediately.",
+    te: "Mee voice vinanu. Calm ga undandi, limb ni move cheyyakandi, antivenom unna hospital ki ventane vellandi.",
+  },
+};
+
+function langKey(language) {
+  const short = (language || "en").split("-")[0].toLowerCase();
+  return short === "hi" || short === "te" ? short : "en";
+}
+
+function localAction(text) {
+  const low = (text || "").toLowerCase();
+  if (/(sos|help|ambulance|call|emergency)/.test(low)) return "sos";
+  if (/(hospital|route|nearest|direction|navigate|take me|antivenom)/.test(low)) return "route_hospital";
+  if (/(snake|photo|camera|identify)/.test(low)) return "identify_snake";
+  if (/(symptom|swelling|breath|vision|bleeding|drowsy|track)/.test(low)) return "track_symptoms";
+  if (/(first aid|what do|what should|bandage|tourniquet|cut|suck)/.test(low)) return "first_aid";
+  return "none";
+}
+
+function localVoiceReply(text, language) {
+  const action = localAction(text);
+  const key = langKey(language);
+  return {
+    ai_response: LOCAL_REPLIES[action][key],
+    action,
+    audio_base64: "",
+    language,
+  };
+}
 
 export function useVoiceAssistant() {
   const navigate = useNavigate();
@@ -102,14 +167,14 @@ export function useVoiceAssistant() {
   }, [victimLocation]);
 
   // Stop playback if the consumer unmounts mid-sentence.
-  useEffect(() => () => { stopAudio(); }, []);
+  useEffect(() => () => { stopAudio(); stopLocalSpeech(); }, []);
 
   const runAssistant = useCallback(async (blob) => {
     setStatus("processing");
     try {
       // STEP 1 — transcribe. Show the user's words the instant STT returns,
       // before Gemini + TTS finish, so the UI never feels stuck.
-      const stt = await speechToText(blob);
+      const stt = await speechToText(blob, 8000);
       const transcript = (stt?.transcript || "").trim();
       if (!transcript) {
         setError("stt");
@@ -124,9 +189,15 @@ export function useVoiceAssistant() {
         role: m.role === "user" ? "user" : "assistant",
         text: m.text,
       }));
-      const res = await sendVoiceReply(
-        transcript, detectedLang, history, contextRef.current
-      );
+      let res;
+      try {
+        res = await sendVoiceReply(
+          transcript, detectedLang, history, contextRef.current, 12000
+        );
+      } catch (replyErr) {
+        console.warn("[assistant] reply fallback", replyErr);
+        res = localVoiceReply(transcript, detectedLang);
+      }
 
       setMessages((m) => [
         ...m,
@@ -140,7 +211,10 @@ export function useVoiceAssistant() {
       }
 
       setStatus("speaking");
-      playAudioBase64(res.audio_base64)
+      const playback = res.audio_base64
+        ? playAudioBase64(res.audio_base64)
+        : speak(res.ai_response, res.language || detectedLang);
+      playback
         .catch(() => {})
         .finally(() => setStatus((s) => (s === "speaking" ? "idle" : s)));
     } catch (e) {
@@ -153,11 +227,13 @@ export function useVoiceAssistant() {
   const start = useCallback(async () => {
     setError(null);
     stopAudio();
+    stopLocalSpeech();
     haptics.tap();
     try {
       const blob = await startRecording({
         // Hands-free: silence auto-stops the mic and flips us to "processing".
         onAutoStop: () => setStatus("processing"),
+        language: language === "hi" ? "hi-IN" : language === "te" ? "te-IN" : "en-IN",
       });
       await runAssistant(blob);
     } catch (e) {
@@ -184,6 +260,7 @@ export function useVoiceAssistant() {
   /** Clear the transcript (e.g. when closing the floating panel). */
   const reset = useCallback(() => {
     stopAudio();
+    stopLocalSpeech();
     stopRecording();
     setMessages([]);
     setError(null);
