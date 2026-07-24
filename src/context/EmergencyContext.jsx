@@ -406,8 +406,8 @@ export function EmergencyProvider({ children }) {
       // Positioned next to Basti Dawakhana (the one surveyed clinic with NO
       // antivenom) so routing demonstrates the core USP: the app routes PAST the
       // nearest-but-empty govt clinic to the nearest stocked hospital (the "trap").
-      victimLocation: { lat: 17.5105, lng: 78.442 },
-      victimLabel: "Jeedimetla, Hyderabad",
+      victimLocation: { lat: 17.5947, lng: 78.4860 },
+      victimLabel: "CMR Kandlakoya, Hyderabad",
       snake: { species: "Russell's Viper", confidence: 0.93, venomous: true },
       severity: "severe",
       symptomLog: [
@@ -429,12 +429,12 @@ export function EmergencyProvider({ children }) {
         { id: "demo-2", name: "Ravi (brother)", phone: "+91 90000 11111" },
       ],
       recommendedHospital: {
-        id: "mrn",
-        name: "Malla Reddy Narayana Multispeciality",
+        id: "cmrims",
+        name: "CMR Institute of Medical Sciences",
         tierKey: "tertiary",
-        eta: 7,
-        km: 3,
-        vials: 22,
+        eta: 2,
+        km: 0.3,
+        vials: 28,
         icu: true,
       },
       patientAge: "34",
