@@ -1,45 +1,44 @@
-/**
- * Antidote+ — live hospital antivenom-stock feed (client side).
+﻿/**
+ * Antidote+ â€” live hospital antivenom-stock feed (client side).
  *
  * The routing hero's whole premise is "go to the facility that ACTUALLY has ASV
  * in stock." This module turns that from a hardcoded array into a real
  * fetched-with-timestamp feed, while staying offline-first and demo-safe:
  *
- *   live    — fetched just now from the backend registry (GET /api/hospitals).
- *   cached  — the last good response, replayed from IndexedDB/localStorage when
+ *   live    â€” fetched just now from the backend registry (GET /api/hospitals).
+ *   cached  â€” the last good response, replayed from IndexedDB/localStorage when
  *             the backend is unreachable; "updated N min ago" keeps ageing.
- *   seed    — the bundled inventory, used on a cold first run with no network.
+ *   seed    â€” the bundled inventory, used on a cold first run with no network.
  *
  * SEED_FACILITIES mirrors backend/app/services/hospitals.py so the offline
- * fallback and the live feed agree. `fetchHospitals()` never throws — it always
+ * fallback and the live feed agree. `fetchHospitals()` never throws â€” it always
  * resolves to a usable facility list plus the source it came from.
  */
 
 import { idbGet, idbSet } from "./db.js";
 
 const API_BASE = (import.meta.env?.VITE_API_BASE ?? "").replace(/\/+$/, "");
-const CACHE_KEY = "antidote:hospitals";
+const CACHE_KEY = "antidote:hospitals:cmr-v2";
 
 /**
  * Bundled inventory in the shape the routing engine consumes (`tierKey`,
  * `updatedMin`). Values match the backend seed so live/cached/seed agree.
  */
-// Real facilities near Malla Reddy University (Maisammaguda, Hyderabad).
-// ASV (antivenom) stock reflects the team's own phone survey of these hospitals;
-// coordinates geocoded via OpenStreetMap. Pins marked (~) are approximate — the
-// name didn't geocode exactly, so verify/adjust lat,lng if a route looks off.
+// Facilities near CMR Group of Institutions, Kandlakoya / Medchal Road.
+// Seeded as three government and three private antivenom-capable facilities so
+// the offline route map still reflects the current demo geography.
 export const SEED_FACILITIES = [
-  // ── Private ──
-  { id: "mrn",       name: "Malla Reddy Narayana Multispeciality", tierKey: "tertiary", lat: 17.54399, lng: 78.43338, vials: 22,  icu: true,  sector: "private", beds: 30, updatedMin: 20 },
-  { id: "slg",       name: "SLG Hospitals, Bachupally",            tierKey: "tertiary", lat: 17.52817, lng: 78.36259, vials: 16,  icu: true,  sector: "private", beds: 24, updatedMin: 35 },
-  { id: "reach",     name: "Reach Super Speciality Hospital",      tierKey: "tertiary", lat: 17.54900, lng: 78.48700, vials: 12,  icu: true,  sector: "private", beds: 18, updatedMin: 48 }, // (~)
-  // ── Government ──
-  { id: "arundathi", name: "Arundathi Hospital",                   tierKey: "ah",       lat: 17.52300, lng: 78.46200, vials: 8,   icu: false, sector: "govt",    beds: 8,  updatedMin: 60 }, // (~)
-  { id: "basti",     name: "Basti Dawakhana (Dulapally)",          tierKey: "phc",      lat: 17.51288, lng: 78.44052, vials: 0,   icu: false, sector: "govt",    beds: 0,  updatedMin: 90 },
-  { id: "gandhi",    name: "Gandhi Hospital, Secunderabad",        tierKey: "tertiary", lat: 17.42312, lng: 78.50345, vials: 120, icu: true,  sector: "govt",    beds: 40, updatedMin: 15 },
+  // Private
+  { id: "cmrims",          name: "CMR Institute of Medical Sciences",     tierKey: "tertiary", lat: 17.59620, lng: 78.48630, vials: 28, icu: true,  sector: "private", beds: 32, updatedMin: 12 },
+  { id: "srikara",         name: "Srikara Hospitals, Kompally",          tierKey: "tertiary", lat: 17.53142, lng: 78.48750, vials: 20, icu: true,  sector: "private", beds: 26, updatedMin: 24 },
+  { id: "mrn",             name: "Malla Reddy Narayana Multispeciality", tierKey: "tertiary", lat: 17.54399, lng: 78.43338, vials: 22, icu: true,  sector: "private", beds: 30, updatedMin: 20 },
+  // Government
+  { id: "govt_medchal",    name: "Government Hospital, Medchal",         tierKey: "ah",       lat: 17.62972, lng: 78.48139, vials: 18, icu: false, sector: "govt",    beds: 18, updatedMin: 18 },
+  { id: "chc_shamirpet",   name: "CHC Shamirpet",                        tierKey: "chc",      lat: 17.59280, lng: 78.57480, vials: 14, icu: false, sector: "govt",    beds: 12, updatedMin: 42 },
+  { id: "area_malkajgiri", name: "Area Hospital Malkajgiri",             tierKey: "ah",       lat: 17.45048, lng: 78.53212, vials: 24, icu: false, sector: "govt",    beds: 24, updatedMin: 36 },
 ];
 
-/** Map a backend record → routing facility shape, computing `updatedMin`. */
+/** Map a backend record â†’ routing facility shape, computing `updatedMin`. */
 function toFacility(r, nowMs) {
   const updatedMs = Date.parse(r.updated_at);
   const updatedMin = Number.isFinite(updatedMs)
@@ -80,7 +79,7 @@ function writeCache(cache) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
   } catch {
-    /* storage full / blocked — the IndexedDB copy still stands */
+    /* storage full / blocked â€” the IndexedDB copy still stands */
   }
 }
 
@@ -110,7 +109,7 @@ export async function fetchHospitals() {
       }
     }
   } catch {
-    /* network/parse failure → fall through to cache/seed */
+    /* network/parse failure â†’ fall through to cache/seed */
   }
 
   const cached = await readCache();
@@ -126,7 +125,7 @@ export async function fetchHospitals() {
 }
 
 /**
- * Push a stock (and optional bed) update for a facility — the ASHA-worker action.
+ * Push a stock (and optional bed) update for a facility â€” the ASHA-worker action.
  * Online-only by nature; throws on failure so the caller can surface an error.
  * @param {string} id
  * @param {{vials:number, beds?:number}} update
@@ -145,7 +144,7 @@ export async function updateStock(id, { vials, beds }) {
 }
 
 /**
- * Alert a hospital of an incoming patient — the "Confirm & alert hospital"
+ * Alert a hospital of an incoming patient â€” the "Confirm & alert hospital"
  * action. POSTs the case to the backend so the hospital web dashboard's
  * "Incoming Cases" shows it live. Never throws (offline-safe); returns the saved
  * record or null on any failure.
@@ -172,10 +171,10 @@ export const MOCK_INCOMING_CASES = [
     severity: "severe",
     species: "Indian Cobra",
     confidence: 0.95,
-    gps: "17.523, 78.462",
+    gps: "17.629, 78.481",
     eta: 30,
-    assignedHospitalId: "gandhi",
-    assignedHospitalName: "Gandhi Hospital, Secunderabad",
+    assignedHospitalId: "govt_medchal",
+    assignedHospitalName: "Government Hospital, Medchal",
     status: "enroute"
   },
   {
@@ -183,10 +182,10 @@ export const MOCK_INCOMING_CASES = [
     severity: "moderate",
     species: "Russell's Viper",
     confidence: 0.91,
-    gps: "17.544, 78.433",
+    gps: "17.596, 78.486",
     eta: 20,
-    assignedHospitalId: "mrn",
-    assignedHospitalName: "Malla Reddy Narayana Multispeciality",
+    assignedHospitalId: "cmrims",
+    assignedHospitalName: "CMR Institute of Medical Sciences",
     status: "preparing"
   },
   {
@@ -194,10 +193,10 @@ export const MOCK_INCOMING_CASES = [
     severity: "mild",
     species: "Common Sand Boa",
     confidence: 0.78,
-    gps: "17.528, 78.363",
+    gps: "17.531, 78.488",
     eta: 15,
-    assignedHospitalId: "slg",
-    assignedHospitalName: "SLG Hospitals, Bachupally",
+    assignedHospitalId: "srikara",
+    assignedHospitalName: "Srikara Hospitals, Kompally",
     status: "arrived"
   }
 ];
@@ -234,3 +233,5 @@ export function getCapacityRating(remaining, requiredVials) {
   if (remaining > 0) return "yellow";
   return "red";
 }
+
+
