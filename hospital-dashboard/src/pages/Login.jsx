@@ -237,8 +237,8 @@ export default function Login() {
             }}>
               <div style={{ fontWeight: 700, marginBottom: 6, color: "var(--dark)" }}>Demo Logins:</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                <code style={{ background: "var(--teal-pale)", color: "var(--teal-dark)", padding: "2px 8px", borderRadius: 6 }}>mrn / mrn123</code>
-                <code style={{ background: "var(--teal-pale)", color: "var(--teal-dark)", padding: "2px 8px", borderRadius: 6 }}>gandhi / gandhi123</code>
+                <code style={{ background: "var(--teal-pale)", color: "var(--teal-dark)", padding: "2px 8px", borderRadius: 6 }}>cmrims / cmrims123</code>
+                <code style={{ background: "var(--teal-pale)", color: "var(--teal-dark)", padding: "2px 8px", borderRadius: 6 }}>govt_medchal / medchal123</code>
                 <code style={{ background: "var(--teal-pale)", color: "var(--teal-dark)", padding: "2px 8px", borderRadius: 6 }}>admin / admin123</code>
               </div>
             </div>
@@ -258,7 +258,7 @@ export default function Login() {
                   className="premium-input"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Vikarabad Area Hospital"
+                  placeholder="e.g. CMR Institute of Medical Sciences"
                   required
                 />
               </div>
@@ -269,7 +269,7 @@ export default function Login() {
                   value={username}
                   autoCapitalize="none"
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. vikarabad-ah"
+                  placeholder="e.g. cmrims"
                   required
                 />
               </div>
