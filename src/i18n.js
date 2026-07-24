@@ -32,7 +32,7 @@ export const T = {
     locShared: "Live location & symptoms shared", otherOpts: "Other facilities with stock",
     dontChase: "Don't chase the snake",
     dontChaseBody: "Treatment is based on your symptoms, not the species. Antivenom in India is polyvalent — it covers the four major venomous snakes (the Big Four). It does not cover every species well. Photograph it only if completely safe.",
-    trust: "Stock updated by hospital staff & ASHA workers. Demo inventory across Vikarabad district.",
+    trust: "Stock updated by hospital staff & ASHA workers. Demo inventory around CMR Kandlakoya.",
     limited: "Limited — can stabilise, may refer onward", stale: "needs reconfirmation",
     reserving: "Reserving antivenom", relaying: "Relaying your symptoms & location",
     minsFurther: "further than the nearest clinic — but treatment is guaranteed here",

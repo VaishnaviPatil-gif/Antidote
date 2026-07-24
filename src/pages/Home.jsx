@@ -21,23 +21,23 @@ import ResumeBanner from "../components/ResumeBanner.jsx";
  * (GPS), and permission-denied → manual entry — and written to context as
  * soon as it resolves so every later screen (and routing) reads it. If the
  * victim taps the hero before location resolves, we fall back to the seeded
- * Marpally scenario so the demo flow never breaks.
+ * CMR Kandlakoya scenario so the demo flow never breaks.
  */
 
-/** Seeded areas near Malla Reddy University (match the hospital coordinates),
+/** Seeded areas near CMR Kandlakoya (match the hospital coordinates),
  *  used for the offline-friendly manual fallback. First entry is the default.
  *  Keep these local to the hospitals so routing stays sensible if GPS is denied. */
 const SEED_VILLAGES = [
-  { label: "Maisammaguda", lat: 17.5623, lng: 78.4538 },
-  { label: "Dulapally", lat: 17.5290, lng: 78.4560 },
-  { label: "Kompally", lat: 17.5470, lng: 78.4870 },
-  { label: "Suraram", lat: 17.5150, lng: 78.4330 },
+  { label: "CMR Kandlakoya", lat: 17.5947, lng: 78.4860 },
+  { label: "Medchal", lat: 17.6297, lng: 78.4814 },
+  { label: "Kompally", lat: 17.5314, lng: 78.4875 },
+  { label: "Shamirpet", lat: 17.5928, lng: 78.5748 },
 ];
 const DEFAULT_LOCATION = SEED_VILLAGES[0];
 
 /**
  * Demo-only switch. When true, tapping the hero with no resolved location
- * silently falls back to the seeded Marpally scenario so an on-stage demo
+ * silently falls back to the seeded CMR Kandlakoya scenario so an on-stage demo
  * never dead-ends. In production (false) real GPS or an explicit manual
  * choice is required — we never fabricate a victim location.
  */
