@@ -30,14 +30,14 @@ _MAX = 25
 _SEED = [
     {
         "id": "P-882-901", "severity": "severe", "species": "Indian Cobra",
-        "confidence": 0.95, "gps": "17.523, 78.462", "eta_min": 12,
-        "assigned_hospital_id": "gandhi", "assigned_hospital": "Gandhi Hospital, Secunderabad",
+        "confidence": 0.95, "gps": "17.629, 78.481", "eta_min": 12,
+        "assigned_hospital_id": "govt_medchal", "assigned_hospital": "Government Hospital, Medchal",
         "mins_since_bite": 25, "status": "enroute", "live": False,
     },
     {
         "id": "P-491-008", "severity": "mild", "species": "Common Sand Boa",
-        "confidence": 0.78, "gps": "17.528, 78.363", "eta_min": 15,
-        "assigned_hospital_id": "slg", "assigned_hospital": "SLG Hospitals, Bachupally",
+        "confidence": 0.78, "gps": "17.531, 78.488", "eta_min": 15,
+        "assigned_hospital_id": "srikara", "assigned_hospital": "Srikara Hospitals, Kompally",
         "mins_since_bite": 95, "status": "arrived", "live": False,
     },
 ]
