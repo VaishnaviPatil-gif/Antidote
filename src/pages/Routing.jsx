@@ -21,8 +21,8 @@ const LiveRouteMap = lazy(() => import("../components/LiveRouteMap.jsx"));
  * The differentiator: route the snakebite victim NOT to the nearest facility,
  * but to the nearest facility that ACTUALLY HAS anti-snake-venom (ASV) in stock.
  *
- * Scenario: victim in Marpally, Vikarabad district (rural Telangana), bitten 18 min ago.
- * Seeded inventory across 8 facilities. Distances are real haversine from coordinates.
+ * Scenario: victim near CMR Group of Institutions, Kandlakoya / Medchal Road.
+ * Seeded inventory across 6 facilities. Distances are real haversine from coordinates.
  *
  * STEP 10 INTEGRATION (the only change from the standalone original): the UI,
  * styles, inline `C`/`T` tokens and the routing algorithm are byte-for-byte
@@ -66,7 +66,7 @@ const T = {
     locShared: "Live location & symptoms shared", otherOpts: "Other facilities with stock",
     dontChase: "Don't chase the snake",
     dontChaseBody: "Treatment is based on your symptoms, not the species. Antivenom in India is polyvalent — it covers all four major venomous snakes. Photograph it only if completely safe.",
-    trust: "Stock updated by hospital staff & ASHA workers. Demo inventory across Vikarabad district.",
+    trust: "Stock updated by hospital staff & ASHA workers. Demo inventory around CMR Kandlakoya.",
     stockLive: "Live stock", stockCached: "Cached stock", stockSeed: "Offline stock",
     filterAll: "All", filterIcu: "ICU", filterGovt: "Govt", filterPrivate: "Private", filterBeds: "Has beds",
     beds: "beds", noneMatch: "No facilities match this filter.",
@@ -129,7 +129,7 @@ const T = {
 // ── Victim + seeded facility inventory (real coords → real distances) ──────
 // Fallback victim location, used only when context has no victimLocation yet.
 // Malla Reddy University (Maisammaguda, Hyderabad) — the demo's home turf.
-const VICTIM = { lat: 17.56229, lng: 78.4538 };
+const VICTIM = { lat: 17.5947, lng: 78.4860 };
 
 // Facility inventory now comes from the live backend feed (src/lib/hospitals.js)
 // with a graceful cached→seed fallback. SEED_FACILITIES is the offline default.
@@ -376,7 +376,7 @@ export default function AntidotePlusRouting() {
             <Crosshair size={16} style={{ color: C.orange }} className="shrink-0" />
             <div className="min-w-0">
               <div className="text-xs" style={{ color: "#9FBFBD" }}>{t.victim}</div>
-              <div className="text-sm font-semibold truncate">{victimLabel || "Malla Reddy University, Hyderabad"}</div>
+              <div className="text-sm font-semibold truncate">{victimLabel || "CMR Kandlakoya, Hyderabad"}</div>
             </div>
           </div>
           <div className="flex items-center gap-1.5 rounded-lg px-2.5 py-1" style={{ background: "rgba(192,57,43,.22)" }}>
