@@ -70,6 +70,7 @@ export const SAFE_DEFAULT = {
   first_aid_steps: SAFE_FIRST_AID,
 };
 
+// // HACKATHON TEMP - REMOVE AFTER DEMO
 /** True when a client-side Gemini key is configured (demo mode). */
 export function hasClientGeminiKey() {
   return !!(import.meta.env?.VITE_GEMINI_API_KEY || "").trim();
@@ -143,6 +144,7 @@ function mapIdentification(parsed) {
  * @throws on missing key / non-OK / transport error.
  */
 async function generate(parts, { signal, jsonMode = false, temperature = 0 } = {}) {
+  // // HACKATHON TEMP - REMOVE AFTER DEMO
   const key = (import.meta.env?.VITE_GEMINI_API_KEY || "").trim();
   if (!key) throw new Error("no client Gemini key");
 

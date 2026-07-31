@@ -76,6 +76,7 @@ export async function identifySnake(dataUrl) {
   const mimeMatch = /^data:([^;,]+)[;,]/.exec(String(dataUrl));
   const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
 
+  // // HACKATHON TEMP - REMOVE AFTER DEMO
   // HACKATHON demo path: when a client Gemini key is configured, call Gemini
   // directly (no backend / laptop / USB needed). Remove VITE_GEMINI_API_KEY to
   // revert to the secure backend proxy below. See src/lib/gemini.js.
@@ -155,6 +156,7 @@ export async function identifySnake(dataUrl) {
  * @returns {Promise<{text:string, source:string}|null>}
  */
 export async function summarizeSymptoms(symptomLog, biteTime, language) {
+  // // HACKATHON TEMP - REMOVE AFTER DEMO
   // Direct-Gemini demo path (no backend). Falls through to null → local composer.
   if (hasClientGeminiKey()) {
     try {
@@ -185,6 +187,7 @@ export async function summarizeSymptoms(symptomLog, biteTime, language) {
  * POST /api/severity — AI Severity Engine.
  */
 export async function evaluateSeverity(symptoms, snake, minsSinceBite, swellingProgression) {
+  // // HACKATHON TEMP - REMOVE AFTER DEMO
   // Direct-Gemini demo path (no backend). Falls through to null → local engine.
   if (hasClientGeminiKey()) {
     try {

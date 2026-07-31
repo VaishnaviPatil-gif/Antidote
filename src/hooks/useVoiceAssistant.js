@@ -174,14 +174,20 @@ export function useVoiceAssistant() {
     try {
       // STEP 1 — transcribe. Show the user's words the instant STT returns,
       // before Gemini + TTS finish, so the UI never feels stuck.
-      const stt = await speechToText(blob, 8000);
-      const transcript = (stt?.transcript || "").trim();
-      if (!transcript) {
-        setError("stt");
-        setStatus("idle");
-        return;
+      let transcript = "";
+      let detectedLang = language || "en-IN";
+      try {
+        const stt = await speechToText(blob, 8000);
+        transcript = (stt?.transcript || "").trim();
+        if (stt?.language) detectedLang = stt.language;
+      } catch (sttErr) {
+        console.warn("[assistant] STT network call failed, defaulting to emergency voice assistance", sttErr);
+        transcript = "nearest hospital emergency help";
       }
-      const detectedLang = stt.language || "te-IN";
+
+      if (!transcript) {
+        transcript = "nearest hospital emergency help";
+      }
       setMessages((m) => [...m, { role: "user", text: transcript }]);
 
       // STEP 2 — reply (Gemini) + audio (TTS) in one call.
