@@ -268,3 +268,277 @@ table {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ── Real-Time Emergency Dispatch Styles ─────────────────────────── */
+
+/* Notification Panel Container */
+.notification-panel-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 380px;
+  width: 100%;
+  pointer-events: none;
+}
+@media (max-width: 480px) {
+  .notification-panel-container {
+    right: 8px;
+    left: 8px;
+    max-width: none;
+  }
+}
+
+/* Notification Toast */
+.notification-toast {
+  pointer-events: all;
+  background: var(--card-bg);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  transform: translateX(120%);
+  opacity: 0;
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+              opacity 0.4s ease;
+}
+.notification-toast-visible {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.notification-toast-header {
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.notification-pulse-icon {
+  font-size: 18px;
+  animation: notificationPulse 1s ease-in-out infinite;
+}
+
+@keyframes notificationPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+}
+
+.notification-view-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.notification-view-btn:active {
+  transform: scale(0.98);
+}
+
+/* Nav Badge */
+.nav-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  animation: badgePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 6px rgba(192, 57, 43, 0.3);
+}
+
+@keyframes badgePop {
+  0% { transform: scale(0); }
+  100% { transform: scale(1); }
+}
+
+/* Patient Drawer */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 9998;
+  animation: fadeInOverlay 0.25s ease;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.patient-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 460px;
+  max-width: 90vw;
+  height: 100vh;
+  background: var(--card-bg);
+  z-index: 9999;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  animation: slideInDrawer 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInDrawer {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawer-header {
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 24px 32px;
+}
+
+.drawer-section {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.drawer-section:last-child {
+  border-bottom: none;
+}
+
+/* Expanded Patient Card */
+.case-card-expanded {
+  border: 2px solid var(--teal) !important;
+  box-shadow: 0 8px 32px rgba(13, 110, 110, 0.15) !important;
+}
+
+/* QR Code Container */
+.qr-container {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+.qr-container img {
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  transition: transform 0.2s;
+}
+.qr-container img:hover {
+  transform: scale(1.15);
+  box-shadow: var(--shadow-md);
+}
+
+/* Connection Status Indicator */
+.connection-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+.connection-indicator.ws {
+  color: var(--good);
+  background: var(--good-pale);
+}
+.connection-indicator.polling {
+  color: var(--amber);
+  background: var(--amber-pale);
+}
+.connection-indicator.connecting {
+  color: var(--muted);
+  background: #eee;
+}
+
+/* Urgent Card Pulse */
+@keyframes urgentPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(192, 57, 43, 0);
+  }
+}
+.urgent-card {
+  animation: urgentPulse 2s ease-in-out infinite;
+}
+
+/* Live GPS dot */
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+  animation: pulseLive 1.5s infinite;
+  display: inline-block;
+}
+
+/* ── 📺 Judge Presentation Mode Styles ─────────────────────────── */
+body.judge-mode {
+  font-size: 16px !important;
+  background: #051414 !important; /* deep clinical dark background */
+  color: #fff !important;
+}
+
+body.judge-mode .glass-panel {
+  background: rgba(13, 110, 110, 0.15) !important;
+  backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+body.judge-mode h1,
+body.judge-mode h2,
+body.judge-mode h3,
+body.judge-mode div,
+body.judge-mode span,
+body.judge-mode label {
+  color: #fff !important;
+}
+
+/* Hide presentation control items */
+body.judge-mode select,
+body.judge-mode input,
+body.judge-mode textarea,
+body.judge-mode .desktop-nav,
+body.judge-mode button:not(.demo-btn-override) {
+  display: none !important;
+}
+
+/* Maintain Demo Simulator button and Presentation Mode Toggle visibility */
+body.judge-mode button.presentation-btn-override,
+body.judge-mode button.sim-btn-override {
+  display: flex !important;
+}
+
+/* Scale up fonts and cards for projector views */
+body.judge-mode .card {
+  padding: 30px !important;
+  font-size: 1.2rem !important;
+  border-radius: 24px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+body.judge-mode .main-content {
+  max-width: 1400px !important;
+  padding: 40px !important;
+}
+
+body.judge-mode h1 {
+  font-size: 3rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -1.5px !important;
+}
+
+
