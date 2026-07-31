@@ -26,21 +26,8 @@ _lock = threading.Lock()
 _cases: list[dict] | None = None
 _MAX = 25
 
-# Seed examples so the dashboard isn't empty before the first live alert.
-_SEED = [
-    {
-        "id": "P-882-901", "severity": "severe", "species": "Indian Cobra",
-        "confidence": 0.95, "gps": "17.629, 78.481", "eta_min": 12,
-        "assigned_hospital_id": "govt_medchal", "assigned_hospital": "Government Hospital, Medchal",
-        "mins_since_bite": 25, "status": "enroute", "live": False,
-    },
-    {
-        "id": "P-491-008", "severity": "mild", "species": "Common Sand Boa",
-        "confidence": 0.78, "gps": "17.531, 78.488", "eta_min": 15,
-        "assigned_hospital_id": "srikara", "assigned_hospital": "Srikara Hospitals, Kompally",
-        "mins_since_bite": 95, "status": "arrived", "live": False,
-    },
-]
+# Empty by default so the dashboard starts fresh for live emergency testing.
+_SEED = []
 
 
 def _persist() -> None:
@@ -73,23 +60,105 @@ def _load() -> list[dict]:
 
 
 def list_cases(hospital_id: str | None) -> list[dict]:
-    """All cases (admin) or only those routed to `hospital_id`."""
+    """All cases (admin or hospital staff) — allows any logged-in control dashboard to see live alerts."""
     with _lock:
         cases = _load()
-        if hospital_id is None:
-            return [dict(c) for c in cases]
-        return [dict(c) for c in cases if c.get("assigned_hospital_id") == hospital_id]
+        return [dict(c) for c in cases]
+
+
+def get_case(case_id: str) -> dict | None:
+    """Return a single case by id, or None if not found."""
+    with _lock:
+        cases = _load()
+        for c in cases:
+            if c.get("id") == case_id:
+                return dict(c)
+    return None
 
 
 def add_case(data: dict) -> dict:
     """Add (or replace, by id) a case from the victim app's hospital alert."""
     with _lock:
         cases = _load()
-        cid = data.get("id") or f"P-{int(time.time()) % 100000:05d}"
-        rec = {**data, "id": cid, "live": True}
+        cid = data.get("id") or f"ANT-{int(time.time()) % 100000:05d}"
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+        rec = {
+            **data,
+            "id": cid,
+            "live": True,
+            "created_at": now_iso,
+            "updates": data.get("updates", []),
+            "preparation": data.get("preparation", {}),
+            "timeline": data.get("timeline", [
+                {"event": "Bite Reported", "ts": now_iso, "source": "victim"},
+                {"event": "Hospital Alerted", "ts": now_iso, "source": "system"},
+            ]),
+            "last_location": data.get("last_location"),
+        }
         # Replace any existing case with the same id, then push to the front.
         cases[:] = [c for c in cases if c.get("id") != cid]
         cases.insert(0, rec)
         del cases[_MAX:]
         _persist()
         return dict(rec)
+
+
+def update_case_field(case_id: str, field: str, value) -> dict | None:
+    """Update a single top-level field on a case."""
+    with _lock:
+        cases = _load()
+        for c in cases:
+            if c.get("id") == case_id:
+                c[field] = value
+                _persist()
+                return dict(c)
+    return None
+
+
+def add_case_update(case_id: str, update_data: dict) -> bool:
+    """Append an update record to the case's update log and timeline."""
+    with _lock:
+        cases = _load()
+        for c in cases:
+            if c.get("id") == case_id:
+                if "updates" not in c:
+                    c["updates"] = []
+                c["updates"].append(update_data)
+                # Also add to timeline
+                if "timeline" not in c:
+                    c["timeline"] = []
+                event_text = update_data.get("message") or f"{update_data.get('field', 'update')}: {update_data.get('value', '')}"
+                c["timeline"].append({
+                    "event": event_text,
+                    "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+                    "source": update_data.get("from", "system"),
+                })
+                _persist()
+                return True
+    return False
+
+
+def update_case_preparation(case_id: str, field: str, value, ts: float) -> bool:
+    """Update a specific preparation field on a case."""
+    with _lock:
+        cases = _load()
+        for c in cases:
+            if c.get("id") == case_id:
+                if "preparation" not in c:
+                    c["preparation"] = {}
+                c["preparation"][field] = {"value": value, "ts": ts}
+                _persist()
+                return True
+    return False
+
+
+def update_case_location(case_id: str, lat: float, lng: float, ts: float) -> bool:
+    """Update the latest GPS location for a case."""
+    with _lock:
+        cases = _load()
+        for c in cases:
+            if c.get("id") == case_id:
+                c["last_location"] = {"lat": lat, "lng": lng, "ts": ts}
+                _persist()
+                return True
+    return False
