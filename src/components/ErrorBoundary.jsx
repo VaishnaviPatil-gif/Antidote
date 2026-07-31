@@ -69,6 +69,13 @@ export default class ErrorBoundary extends React.Component {
               The app hit an unexpected error. Your emergency data is saved on
               this device — reload to continue where you left off.
             </p>
+            {this.state.error && (
+              <div className="mt-3 p-2 bg-red-50 text-red-700 text-xs font-mono rounded text-left overflow-auto max-h-32 border border-red-200">
+                <strong>Error:</strong> {this.state.error.toString()}
+                <br />
+                {this.state.error.stack}
+              </div>
+            )}
           </div>
           <div className="w-full flex flex-col gap-2" style={{ maxWidth: 320 }}>
             <button

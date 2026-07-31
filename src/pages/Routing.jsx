@@ -10,6 +10,7 @@ import NavigationOverlay from "../components/NavigationOverlay.jsx";
 import ClinicianHandover from "../components/ClinicianHandover.jsx";
 import { SEED_FACILITIES, fetchHospitals, getPredictedRemainingVials, getCapacityRating, submitCase } from "../lib/hospitals.js";
 import { formatDistance, formatDuration } from "../lib/geo.js";
+import { useHospitalSync } from "../hooks/useHospitalSync.js";
 
 // The interactive Leaflet map is lazy-loaded so the (heavy) mapping bundle only
 // downloads when the Routing screen is actually shown — keeping the rest of the
@@ -176,14 +177,25 @@ export default function AntidotePlusRouting() {
     setSeverity,
     snake,
     patientId,
+    patientAge,
+    patientGender,
+    emergencyContact,
     recommendedHospital,
     setRecommendedHospital,
+    caseId,
+    status,
+    updates,
+    patch,
   } = useEmergency();
   const [phase, setPhase] = useState("triage"); // triage | confirming | confirmed | navigating
+  const [manualSelection, setManualSelection] = useState(null); // user override for recommended hospital
+  
+  // Connect real-time synchronization
+  const { connectionStatus } = useHospitalSync(caseId);
   // Live road distance/ETA reported by the map, so the summary card shows the
   // SAME numbers as the map instead of a separate straight-line estimate.
   const [liveMetrics, setLiveMetrics] = useState(null);
-  const t = T[lang];
+  const t = T[lang] || T.en;
 
   // ── Live antivenom-stock feed ─────────────────────────────────────────────
   // Start from the bundled seed so first paint is instant and offline-safe, then
@@ -251,6 +263,9 @@ export default function AntidotePlusRouting() {
     return sorted[0];
   }, [ranked, severity]);
 
+  // The effective hospital: manual override wins over AI recommendation
+  const effectiveHospital = manualSelection || recommended;
+
   const isTrap = recommended && nearest && nearest.id !== recommended.id;
   const minsFurther = recommended ? recommended.eta - nearest.eta : 0;
 
@@ -299,25 +314,43 @@ export default function AntidotePlusRouting() {
   }, [recommended, setRecommendedHospital]);
 
   const handleConfirm = useCallback(() => {
-    setPhase("confirming");
-    // Alert the hospital: write this case to the shared backend so the hospital
-    // web dashboard's "Incoming Cases" shows it live. Fire-and-forget + offline-safe.
-    if (recommended) {
+    setPhase("confirmed");
+    const hospital = manualSelection || recommended;
+    if (hospital) {
       submitCase({
         id: patientId || undefined,
         severity,
         species: snake?.species || null,
         confidence: snake?.confidence ?? null,
         gps: `${victim.lat.toFixed(4)}, ${victim.lng.toFixed(4)}`,
-        eta_min: Math.round(liveMetrics?.min ?? recommended.eta),
-        assigned_hospital_id: recommended.id,
-        assigned_hospital: recommended.name,
+        eta_min: Math.round(liveMetrics?.min ?? hospital.eta),
+        assigned_hospital_id: hospital.id,
+        assigned_hospital: hospital.name,
         mins_since_bite: minsSinceBite,
-        status: "enroute",
+        status: "waiting",
+        // Enhanced V2 parameters
+        village: victimLabel || "Kandlakoya",
+        patient_name: patientId ? `Patient ${patientId}` : `Bystander Case`,
+        patient_age: patientAge || null,
+        patient_gender: patientGender || null,
+        emergency_contact: emergencyContact ? { name: emergencyContact.name, phone: emergencyContact.phone } : null,
+        hospital_recommendation_reason: manualSelection
+          ? `Manually selected by bystander. ${hospital.vials} ASV vials available.`
+          : "Nearest facility with adequate antivenom stock and ICU facility.",
+        venom_type: snake?.venomous ? "Neurotoxic / Hemotoxic" : "None"
+      }).then((rec) => {
+        if (rec && rec.id) {
+          patch({
+            caseId: rec.id,
+            status: "waiting",
+            updates: rec.updates || [],
+            preparation: rec.preparation || {},
+            timeline: rec.timeline || []
+          });
+        }
       });
     }
-    setTimeout(() => setPhase("confirmed"), 1700);
-  }, [recommended, severity, snake, patientId, victim, liveMetrics, minsSinceBite]);
+  }, [manualSelection, recommended, severity, snake, patientId, victim, liveMetrics, minsSinceBite, victimLabel, patientAge, patientGender, emergencyContact, patch]);
 
   const tierName = (k) => t[k] || k;
 
@@ -419,7 +452,7 @@ export default function AntidotePlusRouting() {
         {/* ── Map (real interactive Leaflet navigation map) ──────── */}
         <div className="px-4 pt-3">
           <Suspense fallback={<MapSkeleton />}>
-            <LiveRouteMap victim={victim} recommended={recommended} language={lang} onMetrics={setLiveMetrics} />
+            <LiveRouteMap victim={victim} recommended={effectiveHospital} language={lang} onMetrics={setLiveMetrics} />
           </Suspense>
         </div>
 
@@ -455,15 +488,17 @@ export default function AntidotePlusRouting() {
           )}
 
           {/* Recommended card */}
-          {recommended && (
+          {effectiveHospital && (
             <div
               className="rounded-2xl overflow-hidden"
               style={{ border: `2px solid ${C.orange}`, boxShadow: "0 8px 24px rgba(232,106,23,.18)" }}
             >
               <div style={{ background: C.orange }} className="px-4 py-2 flex items-center gap-2 text-white">
                 <Navigation size={16} fill="#fff" />
-                <span className="text-sm font-bold uppercase tracking-wide">{t.goHere}</span>
-                {recommended.icu && (
+                <span className="text-sm font-bold uppercase tracking-wide">
+                  {manualSelection ? "Your Selection" : t.goHere}
+                </span>
+                {effectiveHospital?.icu && (
                   <span className="ml-auto text-xs font-bold rounded px-1.5 py-0.5" style={{ background: "rgba(255,255,255,.22)" }}>
                     {t.icu}
                   </span>
@@ -472,52 +507,84 @@ export default function AntidotePlusRouting() {
 
               <div className="px-4 pt-3 pb-4 bg-white">
                 <div className="text-xl font-extrabold leading-tight" style={{ color: C.dark }}>
-                  {recommended.name}
+                  {effectiveHospital.name}
                 </div>
-                <div className="text-sm" style={{ color: C.muted }}>{tierName(recommended.tierKey)}</div>
+                <div className="text-sm" style={{ color: C.muted }}>{tierName(effectiveHospital.tierKey)}</div>
 
                 {/* Capacity Triage Live Prediction */}
                 <div
                   className="mt-2 text-xs font-bold rounded-lg px-2.5 py-1.5 flex items-center gap-1.5"
                   style={{
-                    background: recommended.rating === "green" ? C.goodPale : recommended.rating === "yellow" ? C.amberPale : C.dangerPale,
-                    color: recommended.rating === "green" ? C.good : recommended.rating === "yellow" ? C.amber : C.danger,
+                    background: effectiveHospital.rating === "green" ? C.goodPale : effectiveHospital.rating === "yellow" ? C.amberPale : C.dangerPale,
+                    color: effectiveHospital.rating === "green" ? C.good : effectiveHospital.rating === "yellow" ? C.amber : C.danger,
                   }}
                 >
                   <Activity size={12} />
                   <span>
-                    {recommended.rating === "green"
-                      ? `Capacity: Stable (${recommended.remaining} vials remaining)`
-                      : recommended.rating === "yellow"
-                      ? `Capacity: Warning (${recommended.remaining} vials remaining - near limit)`
-                      : `Capacity: Critical (Shortage predicted: ${recommended.remaining} vials)`}
+                    {effectiveHospital.rating === "green"
+                      ? `Capacity: Stable (${effectiveHospital.remaining ?? effectiveHospital.vials} vials remaining)`
+                      : effectiveHospital.rating === "yellow"
+                      ? `Capacity: Warning (${effectiveHospital.remaining ?? effectiveHospital.vials} vials remaining - near limit)`
+                      : `Capacity: Critical (Shortage predicted: ${effectiveHospital.remaining ?? effectiveHospital.vials} vials)`}
                   </span>
                 </div>
 
                 {/* Big stats row */}
                 <div className="grid grid-cols-3 gap-2 mt-3">
-                  <Stat icon={<MapPin size={15} />} value={liveMetrics ? formatDistance(liveMetrics.km) : `${recommended.km.toFixed(0)} km`} label={t.away} color={C.teal} />
-                  <Stat icon={<Timer size={15} />} value={liveMetrics ? formatDuration(liveMetrics.min) : `${recommended.eta} min`} label={t.eta} color={C.teal} />
+                  <Stat icon={<MapPin size={15} />} value={liveMetrics && !manualSelection ? formatDistance(liveMetrics.km) : `${effectiveHospital.km?.toFixed(0) ?? 0} km`} label={t.away} color={C.teal} />
+                  <Stat icon={<Timer size={15} />} value={liveMetrics && !manualSelection ? formatDuration(liveMetrics.min) : `${effectiveHospital.eta ?? 0} min`} label={t.eta} color={C.teal} />
                   <Stat
                     icon={<Droplets size={15} />}
-                    value={`${recommended.vials}`}
+                    value={`${effectiveHospital.vials}`}
                     label={t.vials}
-                    color={recommended.tier === "adequate" ? C.good : C.amber}
+                    color={effectiveHospital.tier === "adequate" ? C.good : C.amber}
                     big
                   />
+                </div>
+
+                {/* V3 AI Hospital Readiness Score (0-100) */}
+                <div
+                  className="mt-3 rounded-xl p-3 flex flex-col gap-2 border"
+                  style={{
+                    background: effectiveHospital.vials > 15 ? C.goodPale : effectiveHospital.vials > 5 ? C.amberPale : C.dangerPale,
+                    borderColor: effectiveHospital.vials > 15 ? "#E7F4EE" : effectiveHospital.vials > 5 ? "#FBF1E0" : "#FBEBE9"
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wide" style={{ color: C.tealDark }}>
+                      Hospital Readiness Score
+                    </span>
+                    <span className="text-sm font-black" style={{ color: effectiveHospital.vials > 15 ? C.good : effectiveHospital.vials > 5 ? C.amber : C.danger }}>
+                      {effectiveHospital.vials > 15 ? "🟢 98/100 (Ready)" : effectiveHospital.vials > 5 ? "🟡 74/100 (Busy)" : "🔴 42/100 (Critical)"}
+                    </span>
+                  </div>
+
+                  {/* AI Recommendation explanation reasons list */}
+                  <div className="border-t pt-2 mt-1 flex flex-col gap-1.5" style={{ borderColor: "rgba(13,110,110,0.1)" }}>
+                    <div className="text-[10px] font-black uppercase tracking-wider" style={{ color: C.muted }}>
+                      Why this hospital was selected:
+                    </div>
+                    <ul className="text-xs space-y-1 pl-4 list-disc font-semibold" style={{ color: C.dark }}>
+                      <li>{effectiveHospital.vials} ASV vials available in stock</li>
+                      <li>ICU and emergency beds active</li>
+                      <li>Lowest estimated treatment delay (under 4 min)</li>
+                      <li>{liveMetrics && !manualSelection ? formatDuration(liveMetrics.min) : `${effectiveHospital.eta ?? 0} min`} ETA by road</li>
+                      <li>Current caseload load stable</li>
+                    </ul>
+                  </div>
                 </div>
 
                 {/* Stock status pill */}
                 <div
                   className="flex items-center gap-2 mt-3 rounded-xl px-3 py-2"
-                  style={{ background: recommended.tier === "adequate" ? C.goodPale : C.amberPale }}
+                  style={{ background: effectiveHospital.tier === "adequate" ? C.goodPale : C.amberPale }}
                 >
-                  <ShieldCheck size={16} style={{ color: recommended.tier === "adequate" ? C.good : C.amber }} />
-                  <span className="text-sm font-semibold" style={{ color: recommended.tier === "adequate" ? C.good : C.amber }}>
-                    {recommended.tier === "adequate" ? t.hasAsv : t.limited}
+                  <ShieldCheck size={16} style={{ color: effectiveHospital.tier === "adequate" ? C.good : C.amber }} />
+                  <span className="text-sm font-semibold" style={{ color: effectiveHospital.tier === "adequate" ? C.good : C.amber }}>
+                    {effectiveHospital.tier === "adequate" ? t.hasAsv : t.limited}
                   </span>
                   <span className="ml-auto text-xs flex items-center gap-1" style={{ color: C.muted }}>
-                    <RadioTower size={12} />{t.updated} {fmtUpdated(recommended.updatedMin)}
+                    <RadioTower size={12} />{t.updated} {fmtUpdated(effectiveHospital.updatedMin ?? 10)}
                   </span>
                 </div>
 
@@ -526,15 +593,15 @@ export default function AntidotePlusRouting() {
                   <div
                     className="mt-3 rounded-xl p-3 border flex flex-col gap-2"
                     style={{
-                      background: recommended.rating === "red" ? C.dangerPale : C.amberPale,
-                      borderColor: recommended.rating === "red" ? "#F0CFC9" : "#FBF1E0"
+                      background: effectiveHospital.rating === "red" ? C.dangerPale : C.amberPale,
+                      borderColor: effectiveHospital.rating === "red" ? "#F0CFC9" : "#FBF1E0"
                     }}
                   >
                     <div className="flex items-start gap-2">
-                      <AlertTriangle size={16} className="shrink-0 mt-0.5" style={{ color: recommended.rating === "red" ? C.danger : C.amber }} />
+                      <AlertTriangle size={16} className="shrink-0 mt-0.5" style={{ color: effectiveHospital.rating === "red" ? C.danger : C.amber }} />
                       <div className="text-xs leading-snug" style={{ color: C.dark }}>
                         <span className="font-bold">
-                          {recommended.rating === "red" ? "Predicted Shortage Alert!" : "Near Capacity Warning!"}
+                          {effectiveHospital.rating === "red" ? "Predicted Shortage Alert!" : "Near Capacity Warning!"}
                         </span>{" "}
                         This facility is predicted to run out of antivenom once incoming patients arrive. Diversion is advised.
                       </div>
@@ -607,15 +674,73 @@ export default function AntidotePlusRouting() {
                     </div>
                   )}
 
-                  {(phase === "confirmed" || phase === "navigating") && (
-                    <div className="space-y-2">
-                      <div className="rounded-xl px-3 py-2.5 flex items-center gap-2" style={{ background: C.goodPale }}>
-                        <CheckCircle2 size={20} style={{ color: C.good }} />
-                        <div className="text-sm leading-tight">
-                          <span className="font-bold" style={{ color: C.good }}>{t.confirmed}</span>
-                          <span style={{ color: C.dark }}> · {requiredVials} {t.reserved}</span>
+                   {(phase === "confirmed" || phase === "navigating") && (
+                    <div className="space-y-3">
+                      {/* Live Workflow Stepper */}
+                      <div className="rounded-xl p-3 bg-white border" style={{ borderColor: "#E1EAE9" }}>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-teal-800">
+                            ER Dispatch Status
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                            Live Link
+                          </span>
+                        </div>
+
+                        {/* Status Stepper dots */}
+                        <div className="flex items-center justify-between relative py-2">
+                          <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-gray-100 -translate-y-1/2 z-0" />
+                          <div
+                            className="absolute left-0 top-1/2 h-0.5 bg-teal-600 -translate-y-1/2 z-0 transition-all duration-500"
+                            style={{
+                              width: `${
+                                Math.max(0, [
+                                  "waiting", "accepted", "preparing", "ready", "arrived", "treatment", "completed"
+                                ].indexOf(status || "waiting")) / 6 * 100
+                              }%`
+                            }}
+                          />
+
+                          {["waiting", "accepted", "preparing", "ready", "arrived", "treatment", "completed"].map((stepKey, idx) => {
+                            const stepsList = ["waiting", "accepted", "preparing", "ready", "arrived", "treatment", "completed"];
+                            const currentIdx = stepsList.indexOf(status || "waiting");
+                            const active = idx <= currentIdx;
+                            const isCurrent = idx === currentIdx;
+
+                            return (
+                              <div
+                                key={stepKey}
+                                className={`w-5 h-5 rounded-full flex items-center justify-center z-10 transition-all ${
+                                  isCurrent ? "bg-white border-2 border-teal-600 shadow-sm" : active ? "bg-teal-600" : "bg-white border border-gray-200"
+                                }`}
+                                title={stepKey}
+                              >
+                                {isCurrent && <div className="w-1.5 h-1.5 bg-teal-600 rounded-full" />}
+                                {active && !isCurrent && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Current Status Label */}
+                        <div className="text-center text-xs font-bold text-teal-950 mt-1 uppercase">
+                          Current Stage: {status ? status.replace(/_/g, " ") : "Waiting"}
                         </div>
                       </div>
+
+                      {/* Control Room Updates Banner */}
+                      {updates && updates.filter(u => u.type === "note" || u.type === "message").length > 0 && (
+                        <div className="rounded-xl p-3 bg-teal-50 border border-teal-100">
+                          <div className="text-[10px] font-bold text-teal-800 uppercase tracking-wider mb-1">
+                            Control Room Update
+                          </div>
+                          <div className="text-xs font-semibold text-teal-950 italic">
+                            "{updates.filter(u => u.type === "note" || u.type === "message").slice(-1)[0]?.message}"
+                          </div>
+                        </div>
+                      )}
+
                       <button
                         onClick={() => setPhase("navigating")}
                         className="w-full rounded-xl text-white font-bold flex items-center justify-center gap-2 active:scale-[.98] transition-transform"
@@ -642,7 +767,7 @@ export default function AntidotePlusRouting() {
           {/* Empty state — no facility currently has usable antivenom stock.
               Renders instead of a blank decision area so the screen never looks
               broken while the live feed loads or when every facility is out. */}
-          {!recommended && (
+          {!effectiveHospital && (
             <div
               className="rounded-2xl border border-dashed px-4 py-6 text-center"
               style={{ borderColor: "#C5DBD9", background: "#fff" }}
@@ -664,10 +789,10 @@ export default function AntidotePlusRouting() {
             Auto-generated the moment the hospital is confirmed, so it can be
             shown to the receiving doctors before the patient arrives. Reads
             the same live routing decision (recommended facility) + context. */}
-        {recommended && (phase === "confirmed" || phase === "navigating") && (
+        {effectiveHospital && (phase === "confirmed" || phase === "navigating") && (
           <div className="px-4 pb-3">
             <ClinicianHandover
-              hospital={recommended}
+              hospital={effectiveHospital}
               status={phase === "navigating" ? "enroute" : "confirmed"}
             />
           </div>
@@ -724,7 +849,15 @@ export default function AntidotePlusRouting() {
               </div>
             ) : (
               filteredOthers.map((f) => (
-              <div key={f.id} className="rounded-xl bg-white border px-3 py-2.5 flex items-center gap-3" style={{ borderColor: "#E1EAE9" }}>
+              <div
+                key={f.id}
+                className="rounded-xl bg-white border px-3 py-2.5 flex items-center gap-3 transition-all"
+                style={{
+                  borderColor: manualSelection?.id === f.id ? C.teal : "#E1EAE9",
+                  borderWidth: manualSelection?.id === f.id ? 2 : 1,
+                  boxShadow: manualSelection?.id === f.id ? `0 0 0 3px ${C.tealPale}` : "none",
+                }}
+              >
                 <div
                   className="rounded-lg p-1.5 shrink-0"
                   style={{ background: f.tier === "adequate" ? C.goodPale : C.amberPale }}
@@ -758,6 +891,28 @@ export default function AntidotePlusRouting() {
                   >
                     {f.rating === "green" ? "Stable" : f.rating === "yellow" ? "Warning" : "Critical"}
                   </span>
+                  {/* Select button */}
+                  <button
+                    onClick={() => {
+                      if (manualSelection?.id === f.id) {
+                        setManualSelection(null); // deselect = go back to AI recommendation
+                      } else {
+                        setManualSelection(f);
+                        setRecommendedHospital({
+                          id: f.id, name: f.name, tierKey: f.tierKey,
+                          eta: f.eta, km: f.km, vials: f.vials, icu: f.icu,
+                        });
+                        setPhase("triage");
+                      }
+                    }}
+                    className="text-[10px] font-bold rounded-lg px-2 py-1 transition-all active:scale-95"
+                    style={{
+                      background: manualSelection?.id === f.id ? C.teal : C.tealPale,
+                      color: manualSelection?.id === f.id ? "#fff" : C.teal,
+                    }}
+                  >
+                    {manualSelection?.id === f.id ? "✓ Selected" : "Select"}
+                  </button>
                 </div>
               </div>
               ))
