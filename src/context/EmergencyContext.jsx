@@ -112,6 +112,12 @@ const DEFAULT_STATE = {
   patientAge: null, // string | null
   patientGender: null, // "male" | "female" | "other" | null
   snakeImage: null, // base64 photo of the snake
+  // ── V2 Real-time dispatcher fields ──
+  caseId: null, // string | null (set after hospital confirmation)
+  status: "waiting", // waiting | accepted | preparing | ready | arrived | treatment | completed
+  updates: [], // list of clinical messages and logs from hospital
+  preparation: {}, // preparation checklist status
+  timeline: [], // synchronized timeline event history
 };
 
 /**
