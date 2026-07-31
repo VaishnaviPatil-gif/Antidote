@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import __version__
 from .config import settings
 from .logging_config import configure_logging
-from .routes import health, hospitals, identify, summarize, severity, auth, cases, voice_chat, test_sarvam
+from .routes import health, hospitals, identify, summarize, severity, auth, cases, voice_chat, test_sarvam, realtime, updates
 
 configure_logging(settings.log_level)
 logger = logging.getLogger("antidote")
@@ -34,7 +34,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -48,6 +48,8 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(cases.router, prefix="/api")
 app.include_router(voice_chat.router, prefix="/api")
 app.include_router(test_sarvam.router, prefix="/api")
+app.include_router(updates.router, prefix="/api")
+app.include_router(realtime.router)  # /ws/* endpoints at root (no /api prefix)
 
 
 @app.on_event("startup")
