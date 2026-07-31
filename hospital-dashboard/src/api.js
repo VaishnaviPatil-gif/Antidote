@@ -2,7 +2,7 @@
 // phone app uses. In dev, requests are relative (/api/*) and Vite proxies them
 // to :8000; for a hosted build set VITE_API_BASE to the deployed backend.
 
-const API_BASE = (import.meta.env?.VITE_API_BASE ?? "").replace(/\/+$/, "");
+export const API_BASE = (import.meta.env?.VITE_API_BASE ?? "").replace(/\/+$/, "");
 const TOKEN_KEY = "antidote.dash.token";
 
 export function getToken() {
@@ -61,8 +61,32 @@ export function updateStock(hospitalId, { vials, beds }) {
 
 // ── Incoming cases ──
 export function fetchCases() {
-  return request("/api/cases");
+  return request("/api/cases", { auth: false });
 }
 export function updateCase(caseData) {
   return request("/api/cases", { method: "POST", body: caseData, auth: false });
 }
+
+// ── Real-time dispatch: hospital → victim updates ──
+export function sendHospitalUpdate(caseId, update) {
+  return request(`/api/cases/${encodeURIComponent(caseId)}/hospital-updates`, {
+    method: "POST",
+    body: update,
+  });
+}
+
+export function sendMessage(caseId, message) {
+  return request(`/api/cases/${encodeURIComponent(caseId)}/hospital-updates`, {
+    method: "POST",
+    body: { type: "message", message },
+  });
+}
+
+export function fetchCaseUpdates(caseId) {
+  return request(`/api/cases/${encodeURIComponent(caseId)}/updates`, { auth: false });
+}
+
+export function fetchCaseLocation(caseId) {
+  return request(`/api/cases/${encodeURIComponent(caseId)}/location`);
+}
+
